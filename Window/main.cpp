@@ -66,7 +66,7 @@ HRESULT InitWindow(HINSTANCE hInstance, int nCmdShow)
     // Create window
     g_hInst = hInstance;
     HWND hWnd = CreateWindow(L"WindowClass", L"Popov Ivan Vladimirovich",
-        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, nullptr,
+        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr,
         nullptr, hInstance, nullptr);
     if (!hWnd) {
         return FALSE;
