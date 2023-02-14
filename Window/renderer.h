@@ -5,6 +5,7 @@
 #include <dxgi.h>
 #include <d3d11.h>
 #include <directxmath.h>
+#include <string>
 
 using namespace DirectX;
 
