@@ -2,7 +2,10 @@
 #include <windows.h>
 #include <directxcolors.h>
 #include "renderer.h"
+#include "resource.h"
 
+#define MAX_LOADSTRING 100
+WCHAR szTitle[MAX_LOADSTRING];
 using namespace DirectX;
 
 // Global Variables
@@ -23,6 +26,18 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
 
+    LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
+    std::wstring dir;
+    dir.resize(MAX_PATH + 1);
+    GetCurrentDirectory(MAX_PATH + 1, &dir[0]);
+    size_t configPos = dir.find(L"x64");
+    if (configPos != std::wstring::npos)
+    {
+        dir.resize(configPos);
+        dir += szTitle;
+        SetCurrentDirectory(dir.c_str());
+    }
+
     if (FAILED(InitWindow(hInstance, nCmdShow))) {
         return FALSE;
     }
@@ -37,7 +52,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
         pRenderer->Render();
     }
 
-    pRenderer->CleanupDevice();
+    pRenderer->Cleanup();
 
     return (int)msg.wParam;
 }
