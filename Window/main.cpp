@@ -49,7 +49,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
-        pRenderer->Render();
+        if (pRenderer->Frame()) {
+            pRenderer->Render();
+        }
     }
 
     pRenderer->Cleanup();
@@ -63,7 +65,7 @@ HRESULT InitWindow(HINSTANCE hInstance, int nCmdShow)
     // Register class
     WNDCLASSEX wcex;
     wcex.cbSize = sizeof(WNDCLASSEX);
-    wcex.style = CS_HREDRAW | CS_VREDRAW;
+    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
     wcex.lpfnWndProc = WndProc;
     wcex.cbClsExtra = 0;
     wcex.cbWndExtra = 0;
@@ -87,14 +89,14 @@ HRESULT InitWindow(HINSTANCE hInstance, int nCmdShow)
         return FALSE;
     }
 
+    ShowWindow(hWnd, nCmdShow);
+    UpdateWindow(hWnd);
+
     pRenderer = new Renderer();
-    if (!pRenderer->InitDevice(hWnd)) {
+    if (!pRenderer->Init(hInstance, hWnd)) {
         delete pRenderer;
         return FALSE;
     }
-
-    ShowWindow(hWnd, nCmdShow);
-    UpdateWindow(hWnd);
 
     {
         RECT rc;
