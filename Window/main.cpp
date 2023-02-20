@@ -90,13 +90,9 @@ HRESULT InitWindow(HINSTANCE hInstance, int nCmdShow)
     }
 
     ShowWindow(hWnd, nCmdShow);
+    SetForegroundWindow(hWnd);
+    SetFocus(hWnd);
     UpdateWindow(hWnd);
-
-    pRenderer = new Renderer();
-    if (!pRenderer->Init(hInstance, hWnd)) {
-        delete pRenderer;
-        return FALSE;
-    }
 
     {
         RECT rc;
@@ -108,6 +104,12 @@ HRESULT InitWindow(HINSTANCE hInstance, int nCmdShow)
         AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, TRUE);
 
         MoveWindow(hWnd, 100, 100, rc.right - rc.left, rc.bottom - rc.top, TRUE);
+    }
+
+    pRenderer = new Renderer();
+    if (!pRenderer->Init(hInstance, hWnd)) {
+        delete pRenderer;
+        return FALSE;
     }
 
     return TRUE;
