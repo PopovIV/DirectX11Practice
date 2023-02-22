@@ -49,7 +49,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
-        pRenderer->Render();
+        if (pRenderer->Frame()) {
+            pRenderer->Render();
+        }
     }
 
     pRenderer->Cleanup();
@@ -63,7 +65,7 @@ HRESULT InitWindow(HINSTANCE hInstance, int nCmdShow)
     // Register class
     WNDCLASSEX wcex;
     wcex.cbSize = sizeof(WNDCLASSEX);
-    wcex.style = CS_HREDRAW | CS_VREDRAW;
+    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
     wcex.lpfnWndProc = WndProc;
     wcex.cbClsExtra = 0;
     wcex.cbWndExtra = 0;
@@ -87,13 +89,9 @@ HRESULT InitWindow(HINSTANCE hInstance, int nCmdShow)
         return FALSE;
     }
 
-    pRenderer = new Renderer();
-    if (!pRenderer->InitDevice(hWnd)) {
-        delete pRenderer;
-        return FALSE;
-    }
-
     ShowWindow(hWnd, nCmdShow);
+    SetForegroundWindow(hWnd);
+    SetFocus(hWnd);
     UpdateWindow(hWnd);
 
     {
@@ -106,6 +104,12 @@ HRESULT InitWindow(HINSTANCE hInstance, int nCmdShow)
         AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, TRUE);
 
         MoveWindow(hWnd, 100, 100, rc.right - rc.left, rc.bottom - rc.top, TRUE);
+    }
+
+    pRenderer = new Renderer();
+    if (!pRenderer->Init(hInstance, hWnd)) {
+        delete pRenderer;
+        return FALSE;
     }
 
     return TRUE;
