@@ -55,6 +55,43 @@ HRESULT Input::Init(HINSTANCE hinstance, HWND hwnd, int screenWidth, int screenH
 
 }
 
+// Function to check if left key is pressed
+bool Input::IsLeftPressed() {
+    // Do a bitwise and on the keyboard state to check if the key is currently being pressed.
+    if (m_keyboardState[DIK_LEFT] || m_keyboardState[DIK_A] & 0x80)
+        return true;
+
+
+    return false;
+}
+
+// Function to check if right key is pressed
+bool Input::IsRightPressed() {
+    // Do a bitwise and on the keyboard state to check if the key is currently being pressed.
+    if (m_keyboardState[DIK_RIGHT] || m_keyboardState[DIK_D] & 0x80)
+        return true;
+
+    return false;
+}
+
+// Function to check if up key is pressed
+bool Input::IsUpPressed() {
+    // Do a bitwise and on the keyboard state to check if the key is currently being pressed.
+    if (m_keyboardState[DIK_UP] || m_keyboardState[DIK_W] & 0x80)
+        return true;
+
+    return false;
+}
+
+// Function to check if down key is pressed
+bool Input::IsDownPressed() {
+    // Do a bitwise and on the keyboard state to check if the key is currently being pressed.
+    if (m_keyboardState[DIK_DOWN] || m_keyboardState[DIK_S] & 0x80)
+        return true;
+
+    return false;
+}
+
 // Resize function
 void Input::Resize(int screenWidth, int screenHeight) {
     m_screenWidth = screenWidth;

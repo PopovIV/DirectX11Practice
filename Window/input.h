@@ -21,6 +21,16 @@ public:
 
     // Function to check if mouse is used
     XMFLOAT3 IsMouseUsed();
+
+    // Function to check if left key is pressed
+    bool IsLeftPressed();
+    // Function to check if right key is pressed
+    bool IsRightPressed();
+    // Function to check if up key is pressed
+    bool IsUpPressed();
+    // Function to check if down key is pressed
+    bool IsDownPressed();
+
     // Resize function
     void Resize(int screenWidth, int screenHeight);
 

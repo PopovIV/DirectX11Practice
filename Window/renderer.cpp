@@ -1,12 +1,6 @@
 #include "renderer.h"
 #include <assert.h>
 
-#define SAFE_RELEASE(p) \
-if (p != NULL) { \
-    p->Release(); \
-    p = NULL;\
-}
-
 // Create Direct3D device and swap chain
 bool Renderer::Init(HINSTANCE hInstance, HWND hWnd) {
     HRESULT hr;
@@ -41,9 +35,9 @@ bool Renderer::Init(HINSTANCE hInstance, HWND hWnd) {
     D3D_FEATURE_LEVEL levels[] = { D3D_FEATURE_LEVEL_11_0 };
     if (SUCCEEDED(hr)) {
         UINT flags = 0;
-#ifdef _DEBUG
+    #ifdef _DEBUG
         flags |= D3D11_CREATE_DEVICE_DEBUG;
-#endif
+    #endif
         hr = D3D11CreateDevice(pSelectedAdapter, D3D_DRIVER_TYPE_UNKNOWN, NULL,
             flags, levels, 1, D3D11_SDK_VERSION, &m_pDevice, &level, &m_pContext);
         assert(level == D3D_FEATURE_LEVEL_11_0);
@@ -104,13 +98,24 @@ bool Renderer::Init(HINSTANCE hInstance, HWND hWnd) {
     }
 
     if (SUCCEEDED(hr)) {
+        m_pCubeMap = new CubeMap;
+        if (!m_pCubeMap) {
+            hr = S_FALSE;
+        }
+    }
+
+    if (SUCCEEDED(hr)) {
         hr = m_pCamera->Init();
     }
 
     if (SUCCEEDED(hr)) {
         hr = m_pInput->Init(hInstance, hWnd, m_width, m_height);
     }
-    printf("HELLO");
+
+    if (SUCCEEDED(hr)) {
+        hr = m_pCubeMap->Init(m_pDevice, m_pContext, m_width, m_height);
+    }
+
     if (FAILED(hr)) {
         Cleanup();
     }
@@ -120,9 +125,96 @@ bool Renderer::Init(HINSTANCE hInstance, HWND hWnd) {
 
 // Function to handle user input from keyboard/mouse
 void Renderer::HandleMovementInput() {
+    bool keyDown;
     XMFLOAT3 mouseMove = m_pInput->IsMouseUsed();
     m_pCamera->MouseMoved(mouseMove.x, mouseMove.y, mouseMove.z);
+    keyDown = m_pInput->IsLeftPressed();
+    MoveLeft(keyDown);
+    keyDown = m_pInput->IsRightPressed();
+    MoveRight(keyDown);
+    keyDown = m_pInput->IsUpPressed();
+    MoveForward(keyDown);
+    keyDown = m_pInput->IsDownPressed();
+    MoveBackward(keyDown);
 }
+
+
+// Function to calculate forward speed and movement
+void Renderer::MoveForward(bool keydown) {
+    // Update the forward speed movement based on the frame time and whether the user is holding the key down or not.
+    if (keydown) {
+        m_forwardSpeed += m_frameMove * 1.0f;
+        if (m_forwardSpeed > m_frameMove * 50.0f) {
+            m_forwardSpeed = m_frameMove * 50.0f;
+        }
+    }
+    else {
+        m_forwardSpeed -= m_frameMove * 0.5f;
+        if (m_forwardSpeed < 0.0f) {
+            m_forwardSpeed = 0.0f;
+        }
+    }
+
+    m_cubePos.x +=  m_forwardSpeed;
+
+}
+
+// Function to calculate backward speed and movement
+void Renderer::MoveBackward(bool keydown) {
+    // Update the backward speed movement based on the frame time and whether the user is holding the key down or not.
+    if (keydown) {
+        m_backwardSpeed += m_frameMove * 1.0f;
+        if (m_backwardSpeed > (m_frameMove * 50.0f)) {
+            m_backwardSpeed = m_frameMove * 50.0f;
+        }
+    }
+    else {
+        m_backwardSpeed -= m_frameMove * 0.5f;
+        if (m_backwardSpeed < 0.0f) {
+            m_backwardSpeed = 0.0f;
+        }
+    }
+
+    m_cubePos.x -= m_backwardSpeed;
+}
+
+// Function to calculate left move speed and movement
+void Renderer::MoveLeft(bool keydown) {
+    // Update the upward speed movement based on the frame time and whether the user is holding the key down or not.
+    if (keydown) {
+        m_leftSpeed += m_frameMove * 1.0f;
+        if (m_leftSpeed > (m_frameMove * 50.0f)) {
+            m_leftSpeed = m_frameMove * 50.0f;
+        }
+    }
+    else {
+        m_leftSpeed -= m_frameMove * 0.5f;
+        if (m_leftSpeed < 0.0f) {
+            m_leftSpeed = 0.0f;
+        }
+    }
+
+    m_cubePos.z += m_leftSpeed;
+}
+
+// Function to calculate right move speed and movement
+void Renderer::MoveRight(bool keydown) {
+    // Update the upward speed movement based on the frame time and whether the user is holding the key down or not.
+    if (keydown) {
+        m_rightSpeed += m_frameMove * 1.0f;
+        if (m_rightSpeed > (m_frameMove * 50.0f)) {
+            m_rightSpeed = m_frameMove * 50.0f;
+        }
+    }
+    else {
+        m_rightSpeed -= m_frameMove * 0.5f;
+        if (m_rightSpeed < 0.0f) {
+            m_rightSpeed = 0.0f;
+        }
+    }
+
+    m_cubePos.z -= m_rightSpeed;
+};
 
 // Update the frame
 bool Renderer::Frame() {
@@ -145,7 +237,7 @@ bool Renderer::Frame() {
     // Update world matrix
     WorldMatrixBuffer worldMatrixBuffer;
 
-    worldMatrixBuffer.mWorldMatrix = XMMatrixRotationY(t);
+    worldMatrixBuffer.mWorldMatrix = XMMatrixRotationY(t) * XMMatrixTranslation(m_cubePos.x, m_cubePos.y, m_cubePos.z);
 
     m_pContext->UpdateSubresource(m_pWorldMatrixBuffer, 0, nullptr, &worldMatrixBuffer, 0, 0);
 
@@ -156,7 +248,7 @@ bool Renderer::Frame() {
     // Get the projection matrix
     XMMATRIX mProjection = XMMatrixPerspectiveFovLH(XM_PIDIV2, m_width / (FLOAT)m_height, 0.01f, 100.0f);
     
-    // Update 
+    // Update Scene matrix
     D3D11_MAPPED_SUBRESOURCE subresource;
     hr = m_pContext->Map(m_pSceneMatrixBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &subresource);
     assert(SUCCEEDED(hr));
@@ -165,6 +257,8 @@ bool Renderer::Frame() {
         sceneBuffer.mViewProjectionMatrix = XMMatrixMultiply(mView, mProjection);
         m_pContext->Unmap(m_pSceneMatrixBuffer, 0);
     }
+
+    m_pCubeMap->Frame(m_pContext, mView, mProjection, m_pCamera->GetCameraPosition());
 
     return SUCCEEDED(hr);
 }
@@ -194,11 +288,20 @@ bool Renderer::Render() {
     rect.bottom = m_height;
     m_pContext->RSSetScissorRects(1, &rect);
 
+    // Render cube map
+    m_pCubeMap->Render(m_pContext);
+
     m_pContext->RSSetState(m_pRasterizerState);
+
+    ID3D11SamplerState* samplers[] = { m_pSampler };
+    m_pContext->PSSetSamplers(0, 1, samplers);
+
+    ID3D11ShaderResourceView* resources[] = { m_textureArray[0].GetTexture() };
+    m_pContext->PSSetShaderResources(0, 1, resources);
 
     m_pContext->IASetIndexBuffer(m_pIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
     ID3D11Buffer* vertexBuffers[] = { m_pVertexBuffer };
-    UINT strides[] = { 16 };
+    UINT strides[] = { 20 };
     UINT offsets[] = { 0 };
     m_pContext->IASetVertexBuffers(0, 1, vertexBuffers, strides, offsets);
     m_pContext->IASetInputLayout(m_pInputLayout);
@@ -217,6 +320,7 @@ bool Renderer::Render() {
 
 // Clean up all the objects we've created
 void Renderer::Cleanup() {
+    SAFE_RELEASE(m_pSampler);
     SAFE_RELEASE(m_pVertexBuffer);
     SAFE_RELEASE(m_pIndexBuffer);
     SAFE_RELEASE(m_pInputLayout);
@@ -233,6 +337,17 @@ void Renderer::Cleanup() {
         m_pCamera->Release();
         delete m_pCamera;
         m_pCamera = nullptr;
+    }
+
+    for (auto t : m_textureArray) {
+        t.Shutdown();
+    }
+    m_textureArray.clear();
+
+    if (m_pCubeMap) {
+        m_pCubeMap->Realese();
+        delete m_pCubeMap;
+        m_pCubeMap = nullptr;
     }
 
     #ifdef _DEBUG
@@ -266,6 +381,7 @@ bool Renderer::Resize(UINT width, UINT height) {
 
             hr = SetupBackBuffer();
             m_pInput->Resize(width, height);
+            m_pCubeMap->Resize(width, height);
         }
         return SUCCEEDED(hr);
     }
@@ -292,37 +408,49 @@ HRESULT Renderer::InitScene() {
     HRESULT hr = S_OK;
 
     static const Vertex Vertices[] = {
-        { -1.0f, 1.0f, -1.0f, RGB(0, 0, 255) },
-        { 1.0f, 1.0f, -1.0f, RGB(0, 255, 0) },
-        { 1.0f, 1.0f, 1.0f, RGB(0, 255, 255) },
-        { -1.0f, 1.0f, 1.0f, RGB(255, 0, 0) },
-        { -1.0f, -1.0f, -1.0f, RGB(255, 0, 255) },
-        { 1.0f, -1.0f, -1.0f, RGB(255, 255, 0) },
-        { 1.0f, -1.0f, 1.0f, RGB(255, 255, 255) },
-        { -1.0f, -1.0f, 1.0f, RGB(0, 0, 0) }
+        // Bottom face
+        {-0.5, -0.5,  0.5, 0, 1},
+        { 0.5, -0.5,  0.5, 1, 1},
+        { 0.5, -0.5, -0.5, 1, 0},
+        {-0.5, -0.5, -0.5, 0, 0},
+        // Top face
+        {-0.5,  0.5, -0.5, 0, 1},
+        { 0.5,  0.5, -0.5, 1, 1},
+        { 0.5,  0.5,  0.5, 1, 0},
+        {-0.5,  0.5,  0.5, 0, 0},
+        // Front face
+        { 0.5, -0.5, -0.5, 0, 1},
+        { 0.5, -0.5,  0.5, 1, 1},
+        { 0.5,  0.5,  0.5, 1, 0},
+        { 0.5,  0.5, -0.5, 0, 0},
+        // Back face
+        {-0.5, -0.5,  0.5, 0, 1},
+        {-0.5, -0.5, -0.5, 1, 1},
+        {-0.5,  0.5, -0.5, 1, 0},
+        {-0.5,  0.5,  0.5, 0, 0},
+        // Left face
+        { 0.5, -0.5,  0.5, 0, 1},
+        {-0.5, -0.5,  0.5, 1, 1},
+        {-0.5,  0.5,  0.5, 1, 0},
+        { 0.5,  0.5,  0.5, 0, 0},
+        // Right face
+        {-0.5, -0.5, -0.5, 0, 1},
+        { 0.5, -0.5, -0.5, 1, 1},
+        { 0.5,  0.5, -0.5, 1, 0},
+        {-0.5,  0.5, -0.5, 0, 0}
     };
     static const USHORT Indices[] = {
-        3,1,0,
-        2,1,3,
-
-        0,5,4,
-        1,5,0,
-
-        3,4,7,
-        0,4,3,
-
-        1,6,5,
-        2,6,1,
-
-        2,7,6,
-        3,7,2,
-
-        6,4,5,
-        7,4,6,
+        0, 2, 1, 0, 3, 2,
+        4, 6, 5, 4, 7, 6,
+        8, 10, 9, 8, 11, 10,
+        12, 14, 13, 12, 15, 14,
+        16, 18, 17, 16, 19, 18,
+        20, 22, 21, 20, 23, 22
     };
     static const D3D11_INPUT_ELEMENT_DESC InputDesc[] = {
-    {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-    {"COLOR", 0,  DXGI_FORMAT_R8G8B8A8_UNORM, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0}};
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0}
+    };
 
     if (SUCCEEDED(hr)) {
         D3D11_BUFFER_DESC desc = {};
@@ -432,6 +560,31 @@ HRESULT Renderer::InitScene() {
         desc.SlopeScaledDepthBias = 0.0f;
 
         hr = m_pDevice->CreateRasterizerState(&desc, &m_pRasterizerState);
+        assert(SUCCEEDED(hr));
+    }
+
+    if (SUCCEEDED(hr)) {
+        Texture tmp;
+        hr = tmp.Init(m_pDevice, m_pContext, L"data/morgana.dds");
+        m_textureArray.push_back(tmp);
+    }
+
+    // Set sampler state
+    if (SUCCEEDED(hr)) {
+        D3D11_SAMPLER_DESC desc = {};
+
+        desc.Filter = D3D11_FILTER_ANISOTROPIC;
+        desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+        desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+        desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+        desc.MinLOD = -D3D11_FLOAT32_MAX;
+        desc.MaxLOD = D3D11_FLOAT32_MAX;
+        desc.MipLODBias = 0.0f;
+        desc.MaxAnisotropy = 16;
+        desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+        desc.BorderColor[0] = desc.BorderColor[1] = desc.BorderColor[2] = desc.BorderColor[3] = 1.0f;
+
+        hr = m_pDevice->CreateSamplerState(&desc, &m_pSampler);
         assert(SUCCEEDED(hr));
     }
 
