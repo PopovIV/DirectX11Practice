@@ -7,7 +7,7 @@ HRESULT Texture::Init(ID3D11Device* device, ID3D11DeviceContext* deviceContext, 
     hr = DirectX::CreateDDSTextureFromFile(device, filename, nullptr, &m_pTextureView);
     if (SUCCEEDED(hr)) {
         // Generate mipmaps for this texture.
-        deviceContext->GenerateMips(m_pTextureView);
+        //deviceContext->GenerateMips(m_pTextureView);
     }
 
     return hr;
