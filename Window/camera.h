@@ -17,6 +17,8 @@ public:
     void MouseMoved(float dx, float dy, float wheel);
     // Function to get view matrix
     void GetBaseViewMatrix(XMMATRIX& viewMatrix) { viewMatrix = m_viewMatrix; };
+    // Function to get camera position
+    XMFLOAT3 GetCameraPosition(void);
 private:
     XMMATRIX m_viewMatrix;
     XMFLOAT3 m_pointOfInterest;

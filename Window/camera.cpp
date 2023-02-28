@@ -2,8 +2,8 @@
 
 HRESULT Camera::Init() {
     m_pointOfInterest = XMFLOAT3(0.0f, 0.0f, 0.0f);
-    m_distanceToPoint = 4.0f;
-    m_phi = -XM_PIDIV4;
+    m_distanceToPoint = 2.0f;
+    m_phi = -XM_PI;
     m_theta = XM_PIDIV4;
     return S_OK;
 }
@@ -32,4 +32,13 @@ void Camera::MouseMoved(float dx, float dy, float wheel) {
     if (m_distanceToPoint < 1.0f) {
         m_distanceToPoint = 1.0f;
     }
+}
+
+// Function to get camera position
+XMFLOAT3 Camera::GetCameraPosition(void) {
+    XMFLOAT3 pos = XMFLOAT3(cosf(m_theta) * cosf(m_phi), sinf(m_theta), cosf(m_theta) * sinf(m_phi));
+    pos.x = pos.x * m_distanceToPoint + m_pointOfInterest.x;
+    pos.y = pos.y * m_distanceToPoint + m_pointOfInterest.y;
+    pos.z = pos.z * m_distanceToPoint + m_pointOfInterest.z;
+    return pos;
 }
