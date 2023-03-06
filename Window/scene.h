@@ -1,4 +1,4 @@
-// CubemMap.h - class for rendering cubemap
+// scene.h - class for rendering scene's geometry
 #pragma once
 
 #include <d3dcompiler.h>
@@ -7,39 +7,39 @@
 #include <directxmath.h>
 #include <string>
 #include <vector>
+#include "texture.h"
 #include "DDSTextureLoader.h"
 #include "utility.h"
 
 using namespace DirectX;
 
-class CubeMap {
+class Scene {
 private:
     struct Vertex {
         float x, y, z;
+        float u, v;
     };
+
     struct WorldMatrixBuffer {
         XMMATRIX mWorldMatrix;
-        XMFLOAT4 size;
     };
+
     struct SceneMatrixBuffer {
         XMMATRIX mViewProjectionMatrix;
-        XMFLOAT4 cameraPos;
     };
 public:
     // Initialize all needed instances
-    HRESULT Init(ID3D11Device* device, ID3D11DeviceContext* context, int screenWidth, int screenHeight);
+    HRESULT Init(ID3D11Device* device, ID3D11DeviceContext* context);
     // Clean up all the objects we've created
     void Release();
-    // Resize function
-    void Resize(int screenWidth, int screenHeight);
+    // Render function
     void Render(ID3D11DeviceContext* context);
-
     // Render the frame
-    bool Frame(ID3D11DeviceContext* context, XMMATRIX viewMatrix, XMMATRIX projectionMatrix, XMFLOAT3 cameraPos);
+    bool Frame(ID3D11DeviceContext* context, XMMATRIX worldMatrix, XMMATRIX viewMatrix, XMMATRIX projectionMatrix);
 
 private:
     // Function to initialize scene's geometry
-    HRESULT InitScene(ID3D11Device* device, ID3D11DeviceContext* context, UINT LatLines, UINT LongLines);
+    HRESULT InitScene(ID3D11Device* device, ID3D11DeviceContext* context);
 
     ID3D11Buffer* m_pVertexBuffer = nullptr;
     ID3D11Buffer* m_pIndexBuffer = nullptr;
@@ -52,9 +52,5 @@ private:
     ID3D11VertexShader* m_pVertexShader = nullptr;
     ID3D11PixelShader* m_pPixelShader = nullptr;
 
-    ID3D11ShaderResourceView* m_pTexture;
-
-    int m_numSphereVertices = 0;
-    int m_numSphereFaces = 0;
-    float m_radius = 1.0f;
+    std::vector<Texture> m_textureArray;
 };
