@@ -101,13 +101,6 @@ bool Renderer::Init(HINSTANCE hInstance, HWND hWnd) {
     }
 
     if (SUCCEEDED(hr)) {
-        m_pCubeMap = new CubeMap;
-        if (!m_pCubeMap) {
-            hr = S_FALSE;
-        }
-    }
-
-    if (SUCCEEDED(hr)) {
         hr = m_pCamera->Init();
     }
 
@@ -116,11 +109,7 @@ bool Renderer::Init(HINSTANCE hInstance, HWND hWnd) {
     }
 
     if (SUCCEEDED(hr)) {
-        hr = m_pScene->Init(m_pDevice, m_pContext);
-    }
-
-    if (SUCCEEDED(hr)) {
-        hr = m_pCubeMap->Init(m_pDevice, m_pContext, m_width, m_height);
+        hr = m_pScene->Init(m_pDevice, m_pContext, m_width, m_height);
     }
 
     if (FAILED(hr)) {
@@ -248,10 +237,9 @@ bool Renderer::Frame() {
     m_pCamera->GetBaseViewMatrix(mView);
 
     // Get the projection matrix
-    XMMATRIX mProjection = XMMatrixPerspectiveFovLH(XM_PIDIV2, m_width / (FLOAT)m_height, 0.01f, 100.0f);
+    XMMATRIX mProjection = XMMatrixPerspectiveFovLH(XM_PIDIV2, m_width / (FLOAT)m_height, 100.0f, 0.1f);
 
-    m_pScene->Frame(m_pContext, mWorld, mView, mProjection);
-    m_pCubeMap->Frame(m_pContext, mView, mProjection, m_pCamera->GetCameraPosition());
+    m_pScene->Frame(m_pContext, mWorld, mView, mProjection, m_pCamera->GetCameraPosition());
 
     return SUCCEEDED(hr);
 }
@@ -261,9 +249,11 @@ bool Renderer::Render() {
     m_pContext->ClearState();
 
     ID3D11RenderTargetView* views[] = { m_pBackBufferRTV };
-    m_pContext->OMSetRenderTargets(1, views, nullptr);
+    m_pContext->OMSetRenderTargets(1, views, m_pDepthBufferDSV);
+
     static const FLOAT BackColor[4] = { 0.1f, 0.1f, 0.1f, 1.0f };
     m_pContext->ClearRenderTargetView(m_pBackBufferRTV, BackColor);
+    m_pContext->ClearDepthStencilView(m_pDepthBufferDSV, D3D11_CLEAR_DEPTH, 0.0f, 0);
 
     D3D11_VIEWPORT viewport;
     viewport.TopLeftX = 0;
@@ -281,9 +271,6 @@ bool Renderer::Render() {
     rect.bottom = m_height;
     m_pContext->RSSetScissorRects(1, &rect);
 
-    // Render cube map
-    m_pCubeMap->Render(m_pContext);
-
     // Render scene
     m_pScene->Render(m_pContext);
 
@@ -298,9 +285,10 @@ void Renderer::Cleanup() {
     SAFE_RELEASE(m_pBackBufferRTV);
     SAFE_RELEASE(m_pSwapChain);
     SAFE_RELEASE(m_pContext);
+    SAFE_RELEASE(m_pDepthBuffer);
+    SAFE_RELEASE(m_pDepthBufferDSV);
     SAFE_RELEASE(m_pCamera);
     SAFE_RELEASE(m_pScene);
-    SAFE_RELEASE(m_pCubeMap);
     SAFE_RELEASE(m_pInput);
 
     #ifdef _DEBUG
@@ -334,7 +322,7 @@ bool Renderer::Resize(UINT width, UINT height) {
 
             hr = SetupBackBuffer();
             m_pInput->Resize(width, height);
-            m_pCubeMap->Resize(width, height);
+            m_pScene->Resize(width, height);
         }
         return SUCCEEDED(hr);
     }
@@ -351,6 +339,27 @@ HRESULT Renderer::SetupBackBuffer() {
         assert(SUCCEEDED(hr));
 
         SAFE_RELEASE(pBackBuffer);
+    }
+    if (SUCCEEDED(hr)) {
+        SAFE_RELEASE(m_pDepthBuffer);
+        SAFE_RELEASE(m_pDepthBufferDSV);
+        D3D11_TEXTURE2D_DESC desc = {};
+        desc.Format = DXGI_FORMAT_D16_UNORM;
+        desc.ArraySize = 1;
+        desc.MipLevels = 1;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.Height = m_height;
+        desc.Width = m_width;
+        desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+        desc.CPUAccessFlags = 0;
+        desc.MiscFlags = 0;
+        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Quality = 0;
+
+        hr = m_pDevice->CreateTexture2D(&desc, NULL, &m_pDepthBuffer);
+        if (SUCCEEDED(hr)) {
+            hr = m_pDevice->CreateDepthStencilView(m_pDepthBuffer, NULL, &m_pDepthBufferDSV);
+        }
     }
 
     return hr;

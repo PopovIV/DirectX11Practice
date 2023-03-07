@@ -11,20 +11,18 @@ cbuffer SceneMatrixBuffer : register (b1)
 
 struct VS_INPUT
 {
-    float3 position : POSITION;
-    float2 uv : TEXCOORD;
+    float4 position : POSITION;
 };
 
 struct PS_INPUT {
     float4 position : SV_POSITION;
-    float2 uv : TEXCOORD;
 };
 
 PS_INPUT main(VS_INPUT input) {
     PS_INPUT output;
 
-    output.position = mul(mViewProjectionMatrix, mul(mWorldMatrix, float4(input.position, 1.0f)));
-    output.uv = input.uv;
+    output.position = mul(mWorldMatrix, input.position);
+    output.position = mul(mViewProjectionMatrix, output.position);
 
     return output;
 }

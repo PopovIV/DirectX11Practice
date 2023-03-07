@@ -4,7 +4,6 @@
 #include "camera.h"
 #include "input.h"
 #include "scene.h"
-#include "cubeMap.h"
 
 using namespace DirectX;
 
@@ -30,7 +29,6 @@ class Renderer {
     void MoveLeft(bool keydown);
     // Function to calculate right move speed and movement
     void MoveRight(bool keydown);
-    // Function to calculate left turn speed and movement
 
     // Function to handle user input from keyboard/mouse
     void HandleMovementInput();
@@ -40,11 +38,12 @@ class Renderer {
     ID3D11DeviceContext* m_pContext = nullptr;
     IDXGISwapChain* m_pSwapChain = nullptr;
     ID3D11RenderTargetView* m_pBackBufferRTV = nullptr;
+    ID3D11Texture2D* m_pDepthBuffer = nullptr;
+    ID3D11DepthStencilView* m_pDepthBufferDSV = nullptr;
 
     Camera* m_pCamera = nullptr;
     Input* m_pInput = nullptr;
     Scene* m_pScene = nullptr;
-    CubeMap* m_pCubeMap = nullptr;
 
     XMFLOAT3 m_cubePos = XMFLOAT3(0.0f, 0.0f, 0.0f);
     float m_forwardSpeed = 0.0f;
