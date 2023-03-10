@@ -29,7 +29,7 @@ public:
     // Initialize all needed instances
     HRESULT Init(ID3D11Device* device, ID3D11DeviceContext* context, int screenWidth, int screenHeight);
     // Clean up all the objects we've created
-    void Realese();
+    void Release();
     // Resize function
     void Resize(int screenWidth, int screenHeight);
     void Render(ID3D11DeviceContext* context);

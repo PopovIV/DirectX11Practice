@@ -15,7 +15,7 @@ public:
     // Function to initialize interface 
     HRESULT Init(HINSTANCE hinstance, HWND hwnd, int screenWidth, int screenHeight);
     // Function to realese interface
-    void Realese();
+    void Release();
     // Function to read the current state into state buffers
     bool Frame();
 

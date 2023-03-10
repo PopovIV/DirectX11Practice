@@ -36,6 +36,9 @@
     <ClCompile Include="cubeMap.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="scene.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="renderer.h">
@@ -62,6 +65,9 @@
     <ClInclude Include="utility.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="scene.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Window.rc">
@@ -73,5 +79,7 @@
     <FxCompile Include="VertexShader.hlsl" />
     <FxCompile Include="CubeMapPixelShader.hlsl" />
     <FxCompile Include="CubeMapVertexShader.hlsl" />
+    <FxCompile Include="TransVertexShader.hlsl" />
+    <FxCompile Include="TransPixelShader.hlsl" />
   </ItemGroup>
 </Project>

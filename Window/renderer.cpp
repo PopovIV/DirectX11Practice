@@ -76,10 +76,6 @@ bool Renderer::Init(HINSTANCE hInstance, HWND hWnd) {
         hr = SetupBackBuffer();
     }
 
-    if (SUCCEEDED(hr)) {
-        hr = InitScene();
-    }
-
     SAFE_RELEASE(pSelectedAdapter);
     SAFE_RELEASE(pFactory);
 
@@ -98,8 +94,8 @@ bool Renderer::Init(HINSTANCE hInstance, HWND hWnd) {
     }
 
     if (SUCCEEDED(hr)) {
-        m_pCubeMap = new CubeMap;
-        if (!m_pCubeMap) {
+        m_pScene = new Scene;
+        if (!m_pScene) {
             hr = S_FALSE;
         }
     }
@@ -113,7 +109,7 @@ bool Renderer::Init(HINSTANCE hInstance, HWND hWnd) {
     }
 
     if (SUCCEEDED(hr)) {
-        hr = m_pCubeMap->Init(m_pDevice, m_pContext, m_width, m_height);
+        hr = m_pScene->Init(m_pDevice, m_pContext, m_width, m_height);
     }
 
     if (FAILED(hr)) {
@@ -137,7 +133,6 @@ void Renderer::HandleMovementInput() {
     keyDown = m_pInput->IsDownPressed();
     MoveBackward(keyDown);
 }
-
 
 // Function to calculate forward speed and movement
 void Renderer::MoveForward(bool keydown) {
@@ -234,31 +229,17 @@ bool Renderer::Frame() {
     }
     t = (timeCur - timeStart) / 1000.0f;
     
-    // Update world matrix
-    WorldMatrixBuffer worldMatrixBuffer;
-
-    worldMatrixBuffer.mWorldMatrix = XMMatrixRotationY(t) * XMMatrixTranslation(m_cubePos.x, m_cubePos.y, m_cubePos.z);
-
-    m_pContext->UpdateSubresource(m_pWorldMatrixBuffer, 0, nullptr, &worldMatrixBuffer, 0, 0);
+    // Get the world matrix
+    XMMATRIX mWorld = XMMatrixRotationY(t) * XMMatrixTranslation(m_cubePos.x, m_cubePos.y, m_cubePos.z);
 
     // Get the view matrix
     XMMATRIX mView;
     m_pCamera->GetBaseViewMatrix(mView);
 
     // Get the projection matrix
-    XMMATRIX mProjection = XMMatrixPerspectiveFovLH(XM_PIDIV2, m_width / (FLOAT)m_height, 0.01f, 100.0f);
-    
-    // Update Scene matrix
-    D3D11_MAPPED_SUBRESOURCE subresource;
-    hr = m_pContext->Map(m_pSceneMatrixBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &subresource);
-    assert(SUCCEEDED(hr));
-    if (SUCCEEDED(hr)) {
-        SceneMatrixBuffer& sceneBuffer = *reinterpret_cast<SceneMatrixBuffer*>(subresource.pData);
-        sceneBuffer.mViewProjectionMatrix = XMMatrixMultiply(mView, mProjection);
-        m_pContext->Unmap(m_pSceneMatrixBuffer, 0);
-    }
+    XMMATRIX mProjection = XMMatrixPerspectiveFovLH(XM_PIDIV2, m_width / (FLOAT)m_height, 100.0f, 0.1f);
 
-    m_pCubeMap->Frame(m_pContext, mView, mProjection, m_pCamera->GetCameraPosition());
+    m_pScene->Frame(m_pContext, mWorld, mView, mProjection, m_pCamera->GetCameraPosition());
 
     return SUCCEEDED(hr);
 }
@@ -268,9 +249,11 @@ bool Renderer::Render() {
     m_pContext->ClearState();
 
     ID3D11RenderTargetView* views[] = { m_pBackBufferRTV };
-    m_pContext->OMSetRenderTargets(1, views, nullptr);
+    m_pContext->OMSetRenderTargets(1, views, m_pDepthBufferDSV);
+
     static const FLOAT BackColor[4] = { 0.1f, 0.1f, 0.1f, 1.0f };
     m_pContext->ClearRenderTargetView(m_pBackBufferRTV, BackColor);
+    m_pContext->ClearDepthStencilView(m_pDepthBufferDSV, D3D11_CLEAR_DEPTH, 0.0f, 0);
 
     D3D11_VIEWPORT viewport;
     viewport.TopLeftX = 0;
@@ -288,29 +271,8 @@ bool Renderer::Render() {
     rect.bottom = m_height;
     m_pContext->RSSetScissorRects(1, &rect);
 
-    // Render cube map
-    m_pCubeMap->Render(m_pContext);
-
-    m_pContext->RSSetState(m_pRasterizerState);
-
-    ID3D11SamplerState* samplers[] = { m_pSampler };
-    m_pContext->PSSetSamplers(0, 1, samplers);
-
-    ID3D11ShaderResourceView* resources[] = { m_textureArray[0].GetTexture() };
-    m_pContext->PSSetShaderResources(0, 1, resources);
-
-    m_pContext->IASetIndexBuffer(m_pIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
-    ID3D11Buffer* vertexBuffers[] = { m_pVertexBuffer };
-    UINT strides[] = { 20 };
-    UINT offsets[] = { 0 };
-    m_pContext->IASetVertexBuffers(0, 1, vertexBuffers, strides, offsets);
-    m_pContext->IASetInputLayout(m_pInputLayout);
-    m_pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    m_pContext->VSSetShader(m_pVertexShader, nullptr, 0);
-    m_pContext->VSSetConstantBuffers(0, 1, &m_pWorldMatrixBuffer);
-    m_pContext->VSSetConstantBuffers(1, 1, &m_pSceneMatrixBuffer);
-    m_pContext->PSSetShader(m_pPixelShader, nullptr, 0);
-    m_pContext->DrawIndexed(36, 0, 0);
+    // Render scene
+    m_pScene->Render(m_pContext);
 
     HRESULT hr = m_pSwapChain->Present(0, 0);
     assert(SUCCEEDED(hr));
@@ -320,35 +282,14 @@ bool Renderer::Render() {
 
 // Clean up all the objects we've created
 void Renderer::Cleanup() {
-    SAFE_RELEASE(m_pSampler);
-    SAFE_RELEASE(m_pVertexBuffer);
-    SAFE_RELEASE(m_pIndexBuffer);
-    SAFE_RELEASE(m_pInputLayout);
-    SAFE_RELEASE(m_pVertexShader);
-    SAFE_RELEASE(m_pRasterizerState);
-    SAFE_RELEASE(m_pSceneMatrixBuffer);
-    SAFE_RELEASE(m_pWorldMatrixBuffer);
-    SAFE_RELEASE(m_pPixelShader);
     SAFE_RELEASE(m_pBackBufferRTV);
     SAFE_RELEASE(m_pSwapChain);
     SAFE_RELEASE(m_pContext);
-    
-    if (m_pCamera) {
-        m_pCamera->Release();
-        delete m_pCamera;
-        m_pCamera = nullptr;
-    }
-
-    for (auto t : m_textureArray) {
-        t.Shutdown();
-    }
-    m_textureArray.clear();
-
-    if (m_pCubeMap) {
-        m_pCubeMap->Realese();
-        delete m_pCubeMap;
-        m_pCubeMap = nullptr;
-    }
+    SAFE_RELEASE(m_pDepthBuffer);
+    SAFE_RELEASE(m_pDepthBufferDSV);
+    SAFE_RELEASE(m_pCamera);
+    SAFE_RELEASE(m_pScene);
+    SAFE_RELEASE(m_pInput);
 
     #ifdef _DEBUG
     if (m_pDevice != nullptr) {
@@ -381,7 +322,7 @@ bool Renderer::Resize(UINT width, UINT height) {
 
             hr = SetupBackBuffer();
             m_pInput->Resize(width, height);
-            m_pCubeMap->Resize(width, height);
+            m_pScene->Resize(width, height);
         }
         return SUCCEEDED(hr);
     }
@@ -399,193 +340,26 @@ HRESULT Renderer::SetupBackBuffer() {
 
         SAFE_RELEASE(pBackBuffer);
     }
-
-    return hr;
-}
-
-// Function to initialize scene's geometry
-HRESULT Renderer::InitScene() {
-    HRESULT hr = S_OK;
-
-    static const Vertex Vertices[] = {
-        // Bottom face
-        {-0.5, -0.5,  0.5, 0, 1},
-        { 0.5, -0.5,  0.5, 1, 1},
-        { 0.5, -0.5, -0.5, 1, 0},
-        {-0.5, -0.5, -0.5, 0, 0},
-        // Top face
-        {-0.5,  0.5, -0.5, 0, 1},
-        { 0.5,  0.5, -0.5, 1, 1},
-        { 0.5,  0.5,  0.5, 1, 0},
-        {-0.5,  0.5,  0.5, 0, 0},
-        // Front face
-        { 0.5, -0.5, -0.5, 0, 1},
-        { 0.5, -0.5,  0.5, 1, 1},
-        { 0.5,  0.5,  0.5, 1, 0},
-        { 0.5,  0.5, -0.5, 0, 0},
-        // Back face
-        {-0.5, -0.5,  0.5, 0, 1},
-        {-0.5, -0.5, -0.5, 1, 1},
-        {-0.5,  0.5, -0.5, 1, 0},
-        {-0.5,  0.5,  0.5, 0, 0},
-        // Left face
-        { 0.5, -0.5,  0.5, 0, 1},
-        {-0.5, -0.5,  0.5, 1, 1},
-        {-0.5,  0.5,  0.5, 1, 0},
-        { 0.5,  0.5,  0.5, 0, 0},
-        // Right face
-        {-0.5, -0.5, -0.5, 0, 1},
-        { 0.5, -0.5, -0.5, 1, 1},
-        { 0.5,  0.5, -0.5, 1, 0},
-        {-0.5,  0.5, -0.5, 0, 0}
-    };
-    static const USHORT Indices[] = {
-        0, 2, 1, 0, 3, 2,
-        4, 6, 5, 4, 7, 6,
-        8, 10, 9, 8, 11, 10,
-        12, 14, 13, 12, 15, 14,
-        16, 18, 17, 16, 19, 18,
-        20, 22, 21, 20, 23, 22
-    };
-    static const D3D11_INPUT_ELEMENT_DESC InputDesc[] = {
-        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0}
-    };
-
     if (SUCCEEDED(hr)) {
-        D3D11_BUFFER_DESC desc = {};
-        desc.ByteWidth = sizeof(Vertices);
-        desc.Usage = D3D11_USAGE_IMMUTABLE;
-        desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-        desc.CPUAccessFlags = 0;
-        desc.MiscFlags = 0;
-        desc.StructureByteStride = 0;
-
-        D3D11_SUBRESOURCE_DATA data;
-        data.pSysMem = &Vertices;
-        data.SysMemPitch = sizeof(Vertices);
-        data.SysMemSlicePitch = 0;
-
-        hr = m_pDevice->CreateBuffer(&desc, &data, &m_pVertexBuffer);
-        assert(SUCCEEDED(hr));
-    }
-
-    if (SUCCEEDED(hr)) {
-        D3D11_BUFFER_DESC desc = {};
-        desc.ByteWidth = sizeof(Indices);
-        desc.Usage = D3D11_USAGE_IMMUTABLE;
-        desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-        desc.CPUAccessFlags = 0;
-        desc.MiscFlags = 0;
-        desc.StructureByteStride = 0;
-
-        D3D11_SUBRESOURCE_DATA data;
-        data.pSysMem = &Indices;
-        data.SysMemPitch = sizeof(Indices);
-        data.SysMemSlicePitch = 0;
-
-        hr = m_pDevice->CreateBuffer(&desc, &data, &m_pIndexBuffer);
-        assert(SUCCEEDED(hr));
-    }
-
-    ID3D10Blob* vertexShaderBuffer = nullptr;
-    ID3D10Blob* pixelShaderBuffer = nullptr;
-    int flags = 0;
-    #ifdef _DEBUG
-    flags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-    #endif
-
-    if (SUCCEEDED(hr)) {
-        hr = D3DCompileFromFile(L"VertexShader.hlsl", NULL, NULL, "main", "vs_5_0", flags, 0, &vertexShaderBuffer, NULL);
-        hr = m_pDevice->CreateVertexShader(vertexShaderBuffer->GetBufferPointer(), vertexShaderBuffer->GetBufferSize(), NULL, &m_pVertexShader);
-    }
-    if (SUCCEEDED(hr)) {
-        hr = D3DCompileFromFile(L"PixelShader.hlsl", NULL, NULL, "main", "ps_5_0", flags, 0, &pixelShaderBuffer, NULL);
-        hr = m_pDevice->CreatePixelShader(pixelShaderBuffer->GetBufferPointer(), pixelShaderBuffer->GetBufferSize(), NULL, &m_pPixelShader);
-    }
-    if (SUCCEEDED(hr)) {
-        int numElements = sizeof(InputDesc) / sizeof(InputDesc[0]);
-        hr = m_pDevice->CreateInputLayout(InputDesc, numElements, vertexShaderBuffer->GetBufferPointer(), vertexShaderBuffer->GetBufferSize(), &m_pInputLayout);
-    }
-
-    SAFE_RELEASE(vertexShaderBuffer);
-    SAFE_RELEASE(pixelShaderBuffer);
-
-    // Set constant buffers
-    if (SUCCEEDED(hr)) {
-        D3D11_BUFFER_DESC desc = {};
-        desc.ByteWidth = sizeof(WorldMatrixBuffer);
+        SAFE_RELEASE(m_pDepthBuffer);
+        SAFE_RELEASE(m_pDepthBufferDSV);
+        D3D11_TEXTURE2D_DESC desc = {};
+        desc.Format = DXGI_FORMAT_D16_UNORM;
+        desc.ArraySize = 1;
+        desc.MipLevels = 1;
         desc.Usage = D3D11_USAGE_DEFAULT;
-        desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        desc.Height = m_height;
+        desc.Width = m_width;
+        desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
         desc.CPUAccessFlags = 0;
         desc.MiscFlags = 0;
-        desc.StructureByteStride = 0;
+        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Quality = 0;
 
-        WorldMatrixBuffer worldMatrixBuffer;
-        worldMatrixBuffer.mWorldMatrix = DirectX::XMMatrixIdentity();
-
-        D3D11_SUBRESOURCE_DATA data;
-        data.pSysMem = &worldMatrixBuffer;
-        data.SysMemPitch = sizeof(worldMatrixBuffer);
-        data.SysMemSlicePitch = 0;
-
-        hr = m_pDevice->CreateBuffer(&desc, &data, &m_pWorldMatrixBuffer);
-        assert(SUCCEEDED(hr));
-    }
-    if (SUCCEEDED(hr)) {
-        D3D11_BUFFER_DESC desc = {};
-        desc.ByteWidth = sizeof(SceneMatrixBuffer);
-        desc.Usage = D3D11_USAGE_DYNAMIC;
-        desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-        desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-        desc.MiscFlags = 0;
-        desc.StructureByteStride = 0;
-
-        hr = m_pDevice->CreateBuffer(&desc, nullptr, &m_pSceneMatrixBuffer);
-        assert(SUCCEEDED(hr));
-    }
-
-    // Set rastrizer state
-    if (SUCCEEDED(hr)) {
-        D3D11_RASTERIZER_DESC desc = {};
-        desc.AntialiasedLineEnable = false;
-        desc.FillMode = D3D11_FILL_SOLID;
-        desc.CullMode = D3D11_CULL_BACK;
-        desc.DepthBias = 0;
-        desc.DepthBiasClamp = 0.0f;
-        desc.FrontCounterClockwise = false;
-        desc.DepthClipEnable = true;
-        desc.ScissorEnable = false;
-        desc.MultisampleEnable = false;
-        desc.SlopeScaledDepthBias = 0.0f;
-
-        hr = m_pDevice->CreateRasterizerState(&desc, &m_pRasterizerState);
-        assert(SUCCEEDED(hr));
-    }
-
-    if (SUCCEEDED(hr)) {
-        Texture tmp;
-        hr = tmp.Init(m_pDevice, m_pContext, L"data/morgana.dds");
-        m_textureArray.push_back(tmp);
-    }
-
-    // Set sampler state
-    if (SUCCEEDED(hr)) {
-        D3D11_SAMPLER_DESC desc = {};
-
-        desc.Filter = D3D11_FILTER_ANISOTROPIC;
-        desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-        desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-        desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-        desc.MinLOD = -D3D11_FLOAT32_MAX;
-        desc.MaxLOD = D3D11_FLOAT32_MAX;
-        desc.MipLODBias = 0.0f;
-        desc.MaxAnisotropy = 16;
-        desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-        desc.BorderColor[0] = desc.BorderColor[1] = desc.BorderColor[2] = desc.BorderColor[3] = 1.0f;
-
-        hr = m_pDevice->CreateSamplerState(&desc, &m_pSampler);
-        assert(SUCCEEDED(hr));
+        hr = m_pDevice->CreateTexture2D(&desc, NULL, &m_pDepthBuffer);
+        if (SUCCEEDED(hr)) {
+            hr = m_pDevice->CreateDepthStencilView(m_pDepthBuffer, NULL, &m_pDepthBufferDSV);
+        }
     }
 
     return hr;

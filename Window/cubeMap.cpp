@@ -1,7 +1,6 @@
 #include "cubeMap.h"
 
-
-// Create Direct3D device and swap chain
+// Initialize all needed instances
 HRESULT CubeMap::Init(ID3D11Device* device, ID3D11DeviceContext* context, int screenWidth, int screenHeight) {
     HRESULT hr = S_OK;
 
@@ -10,7 +9,7 @@ HRESULT CubeMap::Init(ID3D11Device* device, ID3D11DeviceContext* context, int sc
     }
 
     if (FAILED(hr)) {
-        Realese();
+        Release();
     }
 
     Resize(screenWidth, screenHeight);
@@ -28,7 +27,7 @@ void CubeMap::Resize(int screenWidth, int screenHeight) {
 }
 
 // Clean up all the objects we've created
-void CubeMap::Realese() {
+void CubeMap::Release() {
     SAFE_RELEASE(m_pVertexBuffer);
     SAFE_RELEASE(m_pIndexBuffer);
     SAFE_RELEASE(m_pInputLayout);
