@@ -571,7 +571,7 @@ void Scene::Render(ID3D11DeviceContext* context) {
         }
     }
 
-    //m_pCubeMap->Render(context);
+    m_pCubeMap->Render(context);
 
     RenderTransparent(context);
 

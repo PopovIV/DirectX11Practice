@@ -3,7 +3,7 @@
 HRESULT Camera::Init() {
     m_pointOfInterest = XMFLOAT3(0.0f, 0.0f, 0.0f);
     m_distanceToPoint = 2.0f;
-    m_phi = -XM_PI;
+    m_phi = -XM_PIDIV4;
     m_theta = XM_PIDIV4;
     return S_OK;
 }
