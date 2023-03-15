@@ -3,6 +3,7 @@
 #include <directxcolors.h>
 #include "renderer.h"
 #include "resource.h"
+#include "imgui_impl_win32.h"
 
 #define MAX_LOADSTRING 100
 WCHAR szTitle[MAX_LOADSTRING];
@@ -77,7 +78,7 @@ HRESULT InitWindow(HINSTANCE hInstance, int nCmdShow)
     wcex.lpszClassName = L"WindowClass";
     wcex.hIconSm = 0;
     if (!RegisterClassEx(&wcex)) {
-        return FALSE;
+        return E_FAIL;
     }
 
     // Create window
@@ -86,7 +87,7 @@ HRESULT InitWindow(HINSTANCE hInstance, int nCmdShow)
         WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr,
         nullptr, hInstance, nullptr);
     if (!hWnd) {
-        return FALSE;
+        return E_FAIL;
     }
 
     ShowWindow(hWnd, nCmdShow);
@@ -109,17 +110,23 @@ HRESULT InitWindow(HINSTANCE hInstance, int nCmdShow)
     pRenderer = new Renderer();
     if (!pRenderer->Init(hInstance, hWnd)) {
         delete pRenderer;
-        return FALSE;
+        return E_FAIL;
     }
 
     return TRUE;
 }
+
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 // Called every time the application receives a message
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     PAINTSTRUCT ps;
     HDC hdc;
+
+    if (ImGui_ImplWin32_WndProcHandler(hWnd, message, wParam, lParam)) {
+        return true;
+    }
 
     switch (message)
     {

@@ -4,6 +4,7 @@
 #include "camera.h"
 #include "input.h"
 #include "scene.h"
+#include <string>
 
 using namespace DirectX;
 

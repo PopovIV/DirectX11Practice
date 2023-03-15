@@ -52,7 +52,7 @@ private:
     ID3D11VertexShader* m_pVertexShader = nullptr;
     ID3D11PixelShader* m_pPixelShader = nullptr;
 
-    ID3D11ShaderResourceView* m_pTexture;
+    ID3D11ShaderResourceView* m_pTexture = nullptr;
 
     int m_numSphereVertices = 0;
     int m_numSphereFaces = 0;

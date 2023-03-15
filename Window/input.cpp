@@ -174,7 +174,7 @@ bool Input::ReadMouse() {
 
 // Function to check if mouse is used
 XMFLOAT3 Input::IsMouseUsed() {
-    if (m_mouseState.rgbButtons[0] || m_mouseState.rgbButtons[1] || m_mouseState.rgbButtons[2] & 0x80)
+    if (m_mouseState.rgbButtons[1] || m_mouseState.rgbButtons[2] & 0x80)
         return XMFLOAT3((float)m_mouseState.lX, (float)m_mouseState.lY, (float)m_mouseState.lZ);
 
     return XMFLOAT3(0.0f, 0.0f, 0.0f);
