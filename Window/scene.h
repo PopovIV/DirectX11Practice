@@ -9,10 +9,13 @@
 #include <vector>
 #include "cubemap.h"
 #include "texture.h"
+#include "light.h"
 #include "DDSTextureLoader.h"
 #include "utility.h"
 
 using namespace DirectX;
+
+#define MAX_LIGHT 10
 
 static const XMFLOAT4 Vertices[] = {
     {0, -1, -1, 1},
@@ -25,8 +28,10 @@ class Scene {
 private:
 
     struct Vertex {
-        float x, y, z;
-        float u, v;
+        XMFLOAT3 pos;
+        XMFLOAT2 uv;
+        XMFLOAT3 normal;
+        XMFLOAT3 tangent;
     };
 
     struct WorldMatrixBuffer {
@@ -36,6 +41,11 @@ private:
 
     struct SceneMatrixBuffer {
         XMMATRIX mViewProjectionMatrix;
+        XMFLOAT4 cameraPos;
+        XMINT4 lightCount;
+        XMFLOAT4 lightPos[MAX_LIGHT];
+        XMFLOAT4 lightColor[MAX_LIGHT];
+        XMFLOAT4 ambientColor;
     };
 public:
     // Initialize all needed instances
@@ -49,6 +59,15 @@ public:
     // Render the frame
     bool Frame(ID3D11DeviceContext* context, XMMATRIX worldMatrix, XMMATRIX viewMatrix, XMMATRIX projectionMatrix, XMFLOAT3 cameraPos);
 
+    HRESULT CreateNewLight(ID3D11Device* device, ID3D11DeviceContext* context);
+    void DeleteLight();
+
+    std::vector<Light> passLightToRender() { return m_lights; };
+    void getLightFromRender(std::vector<Light> lights) { m_lights = lights; }
+    // Switch flags functions
+    void ToggleSpheres() { m_isSpheresOn = !m_isSpheresOn; };
+    void ToggleNormalMaps() { m_useNormalMap = !m_useNormalMap; };
+    void ToggleShowNormals() { m_showNormals = !m_showNormals; };
 private:
     // Function to initialize scene's geometry
     HRESULT InitScene(ID3D11Device* device, ID3D11DeviceContext* context);
@@ -87,4 +106,12 @@ private:
 
     // flag to know what rect to draw
     bool m_yellowRect = false;
+    // flag to render light spheres
+    bool m_isSpheresOn = true;
+    // flag to use normal maps on cubes
+    bool m_useNormalMap = true;
+    // flag to show normals
+    bool m_showNormals = false;
+
+    std::vector<Light> m_lights;
 };

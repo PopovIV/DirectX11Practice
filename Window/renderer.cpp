@@ -1,6 +1,10 @@
 #include "renderer.h"
 #include <assert.h>
 
+#include "imgui.h"
+#include "imgui_impl_dx11.h"
+#include "imgui_impl_win32.h"
+
 // Create Direct3D device and swap chain
 bool Renderer::Init(HINSTANCE hInstance, HWND hWnd) {
     HRESULT hr;
@@ -112,6 +116,14 @@ bool Renderer::Init(HINSTANCE hInstance, HWND hWnd) {
         hr = m_pScene->Init(m_pDevice, m_pContext, m_width, m_height);
     }
 
+    // Setup Platform/Renderer backends
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImGui::StyleColorsDark();
+    ImGui_ImplWin32_Init(hWnd);
+    ImGui_ImplDX11_Init(m_pDevice, m_pContext);
+
     if (FAILED(hr)) {
         Cleanup();
     }
@@ -215,6 +227,71 @@ void Renderer::MoveRight(bool keydown) {
 bool Renderer::Frame() {
     HRESULT hr = S_OK;
 
+    ImGui_ImplDX11_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+
+    //static bool demoWindow = false;
+    static bool myWindow = true;
+    static bool isSpheresOn = true;
+    static bool useNormalMap = true;
+    static bool showNormals = false;
+    //if (demoWindow) {
+    //    ImGui::ShowDemoWindow(&demoWindow);
+    //}
+
+    if (myWindow) {
+        ImGui::Begin("ImGui", &myWindow);
+
+        //if (ImGui::Button("Open demo")) {
+        //    demoWindow = true;
+        //}
+
+        if (ImGui::Checkbox("Show bulbs", &isSpheresOn)) {
+            m_pScene->ToggleSpheres();
+        }
+
+        if (ImGui::Checkbox("Use normal maps", &useNormalMap)) {
+            m_pScene->ToggleNormalMaps();
+        }
+
+        if (ImGui::Checkbox("Show normals", &showNormals)) {
+            m_pScene->ToggleShowNormals();
+        }
+
+        if (ImGui::Button("+")) {
+            m_pScene->CreateNewLight(m_pDevice, m_pContext);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("-")) {
+            m_pScene->DeleteLight();
+        }
+
+        std::vector<Light> lights = m_pScene->passLightToRender();
+        static float col[MAX_LIGHT][3];
+        static float pos[MAX_LIGHT][4];
+        for (int i = 0; i < lights.size(); i++) {
+            std::string str = "Light " + std::to_string(i);
+            ImGui::Text(str.c_str());
+
+            str = "Pos " + std::to_string(i);
+            ImGui::Text(str.c_str());
+            ImGui::DragFloat3(str.c_str(), pos[i], 0.01f, -1.0f, 1.0f);
+            lights[i].SetPosition(pos[i][0], pos[i][1], pos[i][2], 1.0f);
+
+            col[i][0] = lights[i].GetColor().x;
+            col[i][1] = lights[i].GetColor().y;
+            col[i][2] = lights[i].GetColor().z;
+            str = "Color " + std::to_string(i);
+            ImGui::ColorEdit3(str.c_str() , col[i]);
+            lights[i].SetColor(col[i][0], col[i][1], col[i][2], 1.0f);
+        }
+
+        m_pScene->getLightFromRender(lights);
+
+        ImGui::End();
+    }
+
     m_pCamera->Frame();
     m_pInput->Frame();
 
@@ -238,6 +315,8 @@ bool Renderer::Frame() {
 
     // Get the projection matrix
     XMMATRIX mProjection = XMMatrixPerspectiveFovLH(XM_PIDIV2, m_width / (FLOAT)m_height, 100.0f, 0.1f);
+
+    ImGui::Render();
 
     m_pScene->Frame(m_pContext, mWorld, mView, mProjection, m_pCamera->GetCameraPosition());
 
@@ -282,6 +361,10 @@ bool Renderer::Render() {
 
 // Clean up all the objects we've created
 void Renderer::Cleanup() {
+    ImGui_ImplDX11_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
+
     SAFE_RELEASE(m_pBackBufferRTV);
     SAFE_RELEASE(m_pSwapChain);
     SAFE_RELEASE(m_pContext);

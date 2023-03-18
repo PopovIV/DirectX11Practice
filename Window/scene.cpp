@@ -1,5 +1,9 @@
 #include "scene.h"
 
+#include "imgui.h"
+#include "imgui_impl_dx11.h"
+#include "imgui_impl_win32.h"
+
 // Initialize all needed instances
 HRESULT Scene::Init(ID3D11Device* device, ID3D11DeviceContext* context, int screenWidth, int screenHeight) {
     HRESULT hr = S_OK;
@@ -35,35 +39,35 @@ HRESULT Scene::InitScene(ID3D11Device* device, ID3D11DeviceContext* context) {
 
     static const Vertex Vertices[] = {
         // Bottom face
-        {-0.5, -0.5,  0.5, 0, 1},
-        { 0.5, -0.5,  0.5, 1, 1},
-        { 0.5, -0.5, -0.5, 1, 0},
-        {-0.5, -0.5, -0.5, 0, 0},
+        {{-0.5, -0.5,  0.5}, {0,1}, {0,-1,0}, {1,0,0}},
+        {{ 0.5, -0.5,  0.5}, {1,1}, {0,-1,0}, {1,0,0}},
+        {{ 0.5, -0.5, -0.5}, {1,0}, {0,-1,0}, {1,0,0}},
+        {{-0.5, -0.5, -0.5}, {0,0}, {0,-1,0}, {1,0,0}},
         // Top face
-        {-0.5,  0.5, -0.5, 0, 1},
-        { 0.5,  0.5, -0.5, 1, 1},
-        { 0.5,  0.5,  0.5, 1, 0},
-        {-0.5,  0.5,  0.5, 0, 0},
+        {{-0.5,  0.5, -0.5}, {0,1}, {0,1,0}, {1,0,0}},
+        {{ 0.5,  0.5, -0.5}, {1,1}, {0,1,0}, {1,0,0}},
+        {{ 0.5,  0.5,  0.5}, {1,0}, {0,1,0}, {1,0,0}},
+        {{-0.5,  0.5,  0.5}, {0,0}, {0,1,0}, {1,0,0}},
         // Front face
-        { 0.5, -0.5, -0.5, 0, 1},
-        { 0.5, -0.5,  0.5, 1, 1},
-        { 0.5,  0.5,  0.5, 1, 0},
-        { 0.5,  0.5, -0.5, 0, 0},
+        {{ 0.5, -0.5, -0.5}, {0,1}, {1,0,0}, {0,0,1}},
+        {{ 0.5, -0.5,  0.5}, {1,1}, {1,0,0}, {0,0,1}},
+        {{ 0.5,  0.5,  0.5}, {1,0}, {1,0,0}, {0,0,1}},
+        {{ 0.5,  0.5, -0.5}, {0,0}, {1,0,0}, {0,0,1}},
         // Back face
-        {-0.5, -0.5,  0.5, 0, 1},
-        {-0.5, -0.5, -0.5, 1, 1},
-        {-0.5,  0.5, -0.5, 1, 0},
-        {-0.5,  0.5,  0.5, 0, 0},
+        {{-0.5, -0.5,  0.5}, {0,1}, {-1,0,0}, {0,0,-1}},
+        {{-0.5, -0.5, -0.5}, {1,1}, {-1,0,0}, {0,0,-1}},
+        {{-0.5,  0.5, -0.5}, {1,0}, {-1,0,0}, {0,0,-1}},
+        {{-0.5,  0.5,  0.5}, {0,0}, {-1,0,0}, {0,0,-1}},
         // Left face
-        { 0.5, -0.5,  0.5, 0, 1},
-        {-0.5, -0.5,  0.5, 1, 1},
-        {-0.5,  0.5,  0.5, 1, 0},
-        { 0.5,  0.5,  0.5, 0, 0},
+        {{ 0.5, -0.5,  0.5}, {0,1}, {0,0,1}, {-1,0,0}},
+        {{-0.5, -0.5,  0.5}, {1,1}, {0,0,1}, {-1,0,0}},
+        {{-0.5,  0.5,  0.5}, {1,0}, {0,0,1}, {-1,0,0}},
+        {{ 0.5,  0.5,  0.5}, {0,0}, {0,0,1}, {-1,0,0}},
         // Right face
-        {-0.5, -0.5, -0.5, 0, 1},
-        { 0.5, -0.5, -0.5, 1, 1},
-        { 0.5,  0.5, -0.5, 1, 0},
-        {-0.5,  0.5, -0.5, 0, 0}
+        {{-0.5, -0.5, -0.5}, {0,1}, {0,0,-1}, {1,0,0}},
+        {{ 0.5, -0.5, -0.5}, {1,1}, {0,0,-1}, {1,0,0}},
+        {{ 0.5,  0.5, -0.5}, {1,0}, {0,0,-1}, {1,0,0}},
+        {{-0.5,  0.5, -0.5}, {0,0}, {0,0,-1}, {1,0,0}},
     };
     static const USHORT Indices[] = {
         0, 2, 1, 0, 3, 2,
@@ -75,7 +79,9 @@ HRESULT Scene::InitScene(ID3D11Device* device, ID3D11DeviceContext* context) {
     };
     static const D3D11_INPUT_ELEMENT_DESC InputDesc[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0}
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D11_INPUT_PER_VERTEX_DATA, 0},
     };
 
     if (SUCCEEDED(hr)) {
@@ -121,12 +127,14 @@ HRESULT Scene::InitScene(ID3D11Device* device, ID3D11DeviceContext* context) {
     flags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #endif
 
+    D3DInclude includeObj;
+
     if (SUCCEEDED(hr)) {
-        hr = D3DCompileFromFile(L"VertexShader.hlsl", NULL, NULL, "main", "vs_5_0", flags, 0, &vertexShaderBuffer, NULL);
+        hr = D3DCompileFromFile(L"VertexShader.hlsl", NULL, &includeObj, "main", "vs_5_0", flags, 0, &vertexShaderBuffer, NULL);
         hr = device->CreateVertexShader(vertexShaderBuffer->GetBufferPointer(), vertexShaderBuffer->GetBufferSize(), NULL, &m_pVertexShader);
     }
     if (SUCCEEDED(hr)) {
-        hr = D3DCompileFromFile(L"PixelShader.hlsl", NULL, NULL, "main", "ps_5_0", flags, 0, &pixelShaderBuffer, NULL);
+        hr = D3DCompileFromFile(L"PixelShader.hlsl", NULL, &includeObj, "main", "ps_5_0", flags, 0, &pixelShaderBuffer, NULL);
         hr = device->CreatePixelShader(pixelShaderBuffer->GetBufferPointer(), pixelShaderBuffer->GetBufferSize(), NULL, &m_pPixelShader);
     }
     if (SUCCEEDED(hr)) {
@@ -194,7 +202,13 @@ HRESULT Scene::InitScene(ID3D11Device* device, ID3D11DeviceContext* context) {
 
     if (SUCCEEDED(hr)) {
         Texture tmp;
-        hr = tmp.Init(device, context, L"data/morgana.dds");
+        hr = tmp.Init(device, context, L"data/brick_diffuse.dds");
+        m_textureArray.push_back(tmp);
+    }
+
+    if (SUCCEEDED(hr)) {
+        Texture tmp;
+        hr = tmp.Init(device, context, L"data/brick_normal.dds");
         m_textureArray.push_back(tmp);
     }
 
@@ -227,6 +241,14 @@ HRESULT Scene::InitScene(ID3D11Device* device, ID3D11DeviceContext* context) {
 
         hr = device->CreateDepthStencilState(&dsDesc, &m_pDepthState);
         assert(SUCCEEDED(hr));
+    }
+
+    if (SUCCEEDED(hr)) {
+        // Init one light
+        Light l;
+        hr = l.Init(device, context);
+        assert(SUCCEEDED(hr));
+        m_lights.push_back(l);
     }
 
     return hr;
@@ -285,12 +307,15 @@ HRESULT Scene::InitSceneTransparent(ID3D11Device* device, ID3D11DeviceContext* c
     flags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #endif
 
+    D3DInclude includeObj;
+    D3D_SHADER_MACRO Shader_Macros[] = { {"USE_LIGHTS"}, {NULL, NULL} };
+
     if (SUCCEEDED(hr)) {
         hr = D3DCompileFromFile(L"TransVertexShader.hlsl", NULL, NULL, "main", "vs_5_0", flags, 0, &vertexShaderBuffer, NULL);
         hr = device->CreateVertexShader(vertexShaderBuffer->GetBufferPointer(), vertexShaderBuffer->GetBufferSize(), NULL, &m_pTransVertexShader);
     }
     if (SUCCEEDED(hr)) {
-        hr = D3DCompileFromFile(L"TransPixelShader.hlsl", NULL, NULL, "main", "ps_5_0", flags, 0, &pixelShaderBuffer, NULL);
+        hr = D3DCompileFromFile(L"TransPixelShader.hlsl", Shader_Macros, &includeObj, "main", "ps_5_0", flags, 0, &pixelShaderBuffer, NULL);
         hr = device->CreatePixelShader(pixelShaderBuffer->GetBufferPointer(), pixelShaderBuffer->GetBufferSize(), NULL, &m_pTransPixelShader);
     }
     if (SUCCEEDED(hr)) {
@@ -403,16 +428,22 @@ void Scene::Release() {
     SAFE_RELEASE(m_pTransBlendState);
     SAFE_RELEASE(m_pCubeMap);
 
-    for (auto t : m_textureArray) {
+    for (auto& t : m_textureArray) {
         t.Shutdown();
     }
     m_textureArray.clear();
+
+    for (auto& t : m_lights) {
+        t.Shutdown();
+    }
+    m_lights.clear();
 }
 
 bool Scene::Frame(ID3D11DeviceContext* context, XMMATRIX worldMatrix, XMMATRIX viewMatrix, XMMATRIX projectionMatrix, XMFLOAT3 cameraPos) {
     WorldMatrixBuffer worldMatrixBuffer;
     // Update world matrix 1
-    worldMatrixBuffer.mWorldMatrix = worldMatrix;
+    worldMatrixBuffer.mWorldMatrix = worldMatrix * XMMatrixTranslation(-1.0f, 0.0f, 0.0f);
+    worldMatrixBuffer.color = XMFLOAT4(300.0f, 0.0f, 0.0f, 0.0f);
 
     context->UpdateSubresource(m_pWorldMatrixBuffer, 0, nullptr, &worldMatrixBuffer, 0, 0);
     // Update world matrix 2
@@ -457,13 +488,45 @@ bool Scene::Frame(ID3D11DeviceContext* context, XMMATRIX worldMatrix, XMMATRIX v
     if (SUCCEEDED(hr)) {
         SceneMatrixBuffer& sceneBuffer = *reinterpret_cast<SceneMatrixBuffer*>(subresource.pData);
         sceneBuffer.mViewProjectionMatrix = XMMatrixMultiply(viewMatrix, projectionMatrix);
+        sceneBuffer.cameraPos = XMFLOAT4(cameraPos.x, cameraPos.y, cameraPos.z, 1.0f);
+        sceneBuffer.ambientColor = XMFLOAT4(0.4f, 0.4f, 0.4f, 1.0f);
+        sceneBuffer.lightCount = XMINT4(int(m_lights.size()), m_useNormalMap ? 1 : 0, m_showNormals ? 1 : 0, 0);
+        for (int i = 0; i < m_lights.size(); i++) {
+            sceneBuffer.lightPos[i] = m_lights[i].GetPosition();
+            sceneBuffer.lightColor[i] = m_lights[i].GetColor();
+        }
         context->Unmap(m_pSceneMatrixBuffer, 0);
+    }
+
+    for (auto& l : m_lights) {
+        l.Frame(context, viewMatrix, projectionMatrix);
     }
 
     m_pCubeMap->Frame(context, viewMatrix, projectionMatrix, cameraPos);
 
     return SUCCEEDED(hr);
 }
+
+HRESULT Scene::CreateNewLight(ID3D11Device* device, ID3D11DeviceContext* context) {
+    HRESULT hr = S_OK;
+
+    if (m_lights.size() < MAX_LIGHT) {
+        // Init one light
+        Light l;
+        hr = l.Init(device, context);
+        assert(SUCCEEDED(hr));
+        m_lights.push_back(l);
+    }
+
+    return hr;
+}
+
+void Scene::DeleteLight() {
+    if (!m_lights.empty()) {
+        m_lights[m_lights.size() - 1].Shutdown();
+        m_lights.pop_back();
+    }
+};
 
 void Scene::Render(ID3D11DeviceContext* context) {
     context->OMSetDepthStencilState(m_pDepthState, 0);
@@ -473,12 +536,12 @@ void Scene::Render(ID3D11DeviceContext* context) {
     ID3D11SamplerState* samplers[] = { m_pSampler };
     context->PSSetSamplers(0, 1, samplers);
 
-    ID3D11ShaderResourceView* resources[] = { m_textureArray[0].GetTexture() };
-    context->PSSetShaderResources(0, 1, resources);
+    ID3D11ShaderResourceView* resources[] = { m_textureArray[0].GetTexture(), m_textureArray[1].GetTexture() };
+    context->PSSetShaderResources(0, 2, resources);
 
     context->IASetIndexBuffer(m_pIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
     ID3D11Buffer* vertexBuffers[] = { m_pVertexBuffer };
-    UINT strides[] = { 20 };
+    UINT strides[] = { sizeof(Vertex) };
     UINT offsets[] = { 0 };
     context->IASetVertexBuffers(0, 1, vertexBuffers, strides, offsets);
     context->IASetInputLayout(m_pInputLayout);
@@ -486,6 +549,8 @@ void Scene::Render(ID3D11DeviceContext* context) {
     context->VSSetShader(m_pVertexShader, nullptr, 0);
     context->VSSetConstantBuffers(1, 1, &m_pSceneMatrixBuffer);
     context->PSSetShader(m_pPixelShader, nullptr, 0);
+    context->PSSetConstantBuffers(0, 1, &m_pWorldMatrixBuffer);
+    context->PSSetConstantBuffers(1, 1, &m_pSceneMatrixBuffer);
 
     // Draw first cube
     {
@@ -499,9 +564,18 @@ void Scene::Render(ID3D11DeviceContext* context) {
         context->DrawIndexed(36, 0, 0);
     }
 
+    // Render Spheres
+    if (m_isSpheresOn) {
+        for (auto& l : m_lights) {
+            l.Render(context);
+        }
+    }
+
     m_pCubeMap->Render(context);
 
     RenderTransparent(context);
+
+    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }
 
 

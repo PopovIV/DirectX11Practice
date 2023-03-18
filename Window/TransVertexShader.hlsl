@@ -16,13 +16,13 @@ struct VS_INPUT
 
 struct PS_INPUT {
     float4 position : SV_POSITION;
+    float4 worldPos : POSITION;
 };
 
 PS_INPUT main(VS_INPUT input) {
     PS_INPUT output;
-
-    output.position = mul(mWorldMatrix, input.position);
-    output.position = mul(mViewProjectionMatrix, output.position);
+    output.worldPos = mul(mWorldMatrix, input.position);
+    output.position = mul(mViewProjectionMatrix, output.worldPos);
 
     return output;
 }
