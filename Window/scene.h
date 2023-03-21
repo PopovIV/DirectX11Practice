@@ -16,6 +16,7 @@
 using namespace DirectX;
 
 #define MAX_LIGHT 10
+#define MAX_CUBE 10
 
 static const XMFLOAT4 Vertices[] = {
     {0, -1, -1, 1},

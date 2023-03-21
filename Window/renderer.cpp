@@ -427,7 +427,7 @@ HRESULT Renderer::SetupBackBuffer() {
         SAFE_RELEASE(m_pDepthBuffer);
         SAFE_RELEASE(m_pDepthBufferDSV);
         D3D11_TEXTURE2D_DESC desc = {};
-        desc.Format = DXGI_FORMAT_D16_UNORM;
+        desc.Format = DXGI_FORMAT_D32_FLOAT;
         desc.ArraySize = 1;
         desc.MipLevels = 1;
         desc.Usage = D3D11_USAGE_DEFAULT;

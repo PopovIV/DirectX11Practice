@@ -148,7 +148,7 @@ HRESULT Scene::InitScene(ID3D11Device* device, ID3D11DeviceContext* context) {
     // Set constant buffers
     if (SUCCEEDED(hr)) {
         D3D11_BUFFER_DESC desc = {};
-        desc.ByteWidth = sizeof(WorldMatrixBuffer);
+        desc.ByteWidth = sizeof(WorldMatrixBuffer) * MAX_CUBE;
         desc.Usage = D3D11_USAGE_DEFAULT;
         desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
         desc.CPUAccessFlags = 0;
