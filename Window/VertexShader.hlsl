@@ -19,16 +19,10 @@ struct PS_INPUT
     nointerpolation uint instanceId : INST_ID;
 };
 
-cbuffer WorldMatrixBuffer : register (b0)
-{
-    float4x4 mWorldMatrix;
-    float4 shine;// x - specular power
-};
-
 PS_INPUT main(VS_INPUT input) {
     PS_INPUT output;
 
-    unsigned int idx = vertex.instanceId;
+    unsigned int idx = indexBuffer[input.instanceId].x;
     output.worldPos = mul(geomBuffer[idx].mWorldMatrix, float4(input.position, 1.0f));
     output.position = mul(mViewProjectionMatrix, output.worldPos);
     output.uv = input.uv;

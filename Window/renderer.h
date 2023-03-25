@@ -4,6 +4,9 @@
 #include "camera.h"
 #include "input.h"
 #include "scene.h"
+#include "renderTexture.h"
+#include "postEffect.h"
+#include "defines.h"
 #include <string>
 
 using namespace DirectX;
@@ -45,6 +48,8 @@ class Renderer {
     Camera* m_pCamera = nullptr;
     Input* m_pInput = nullptr;
     Scene* m_pScene = nullptr;
+    RenderTexture* m_pRenderTexture = nullptr;
+    PostEffect* m_pPostEffect = nullptr;
 
     XMFLOAT3 m_cubePos = XMFLOAT3(0.0f, 0.0f, 0.0f);
     float m_forwardSpeed = 0.0f;
