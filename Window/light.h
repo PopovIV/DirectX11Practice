@@ -8,15 +8,16 @@
 #include <vector>
 #include "D3DInclude.h"
 #include "utility.h"
+#include "defines.h"
+
 using namespace DirectX;
 
 class Light {
-
 private:
     struct Vertex {
         float x, y, z;
     };
-    struct WorldMatrixBuffer {
+    struct GeomBuffer {
         XMMATRIX mWorldMatrix;
         XMFLOAT4 color;
     };
@@ -25,28 +26,17 @@ private:
     };
 public:
     // Initialize all needed instances
-    HRESULT Init(ID3D11Device* device, ID3D11DeviceContext* context, XMFLOAT4 color = XMFLOAT4(1.0f, 1.0f, 1.0f, 0.0f), XMFLOAT4 position = XMFLOAT4(0.0f, 1.0f, 0.0f, 0.0f));
+    HRESULT Init(ID3D11Device* device, ID3D11DeviceContext* context);
     // Clean up all the objects we've created
-    void Shutdown();
+    void Release();
     // Render the frame
     void Render(ID3D11DeviceContext* context);
     bool Frame(ID3D11DeviceContext* context, XMMATRIX viewMatrix, XMMATRIX projectionMatrix);
 
-    // Function to set ambient light
-    void SetColor(float red, float green, float blue, float alpha) { m_color = XMFLOAT4(red, green, blue, alpha); };
-    // Function to set position of light
-    void SetPosition(float x, float y, float z, float w) { m_position = XMFLOAT4(x, y, z, w); };
-
-    // Function to get specular light
-    XMFLOAT4 GetColor() { return m_color; };
-    // Function to get position of light
-    XMFLOAT4 GetPosition() { return m_position; };
-
+    // Get light info vector
+   std::vector<std::pair<XMFLOAT3, XMFLOAT3>>& GetLightVector() { return  m_posColorVector; };
   private:
-    XMFLOAT4 m_color = { 1.0f, 1.0f, 1.0f, 0.0f };
-    XMFLOAT4 m_position = { 0.0f, 1.0f, 0.0f, 0.0f };
-
-  private:
+    std::vector<std::pair<XMFLOAT3, XMFLOAT3>> m_posColorVector;
     ID3D11Buffer* m_pVertexBuffer = nullptr;
     ID3D11Buffer* m_pIndexBuffer = nullptr;
     ID3D11Buffer* m_pWorldMatrixBuffer = nullptr;

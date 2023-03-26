@@ -1,27 +1,28 @@
-cbuffer WorldMatrixBuffer : register (b0)
-{
-    float4x4 mWorldMatrix;
-    float4 color;
-};
-
-cbuffer SceneMatrixBuffer : register (b1)
-{
-    float4x4 mViewProjectionMatrix;
-};
+#include "CBTrans.h"
 
 struct VS_INPUT
 {
     float4 position : POSITION;
+    uint instanceId : SV_InstanceID;
 };
 
-struct PS_INPUT {
+struct PS_INPUT
+{
     float4 position : SV_POSITION;
     float4 worldPos : POSITION;
+    uint instanceId : SV_InstanceID;
 };
 
 PS_INPUT main(VS_INPUT input) {
     PS_INPUT output;
-    output.worldPos = mul(mWorldMatrix, input.position);
+
+#ifdef USE_LIGHTS
+    output.worldPos = mul(geomBuffer.mWorldMatrix, input.position);
+#else
+    unsigned int idx = input.instanceId;
+    output.worldPos = mul(geomBuffer[idx].mWorldMatrix, input.position);
+    output.instanceId = idx;
+#endif // !USE_LIGHTS
     output.position = mul(mViewProjectionMatrix, output.worldPos);
 
     return output;

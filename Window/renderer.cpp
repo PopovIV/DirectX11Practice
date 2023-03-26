@@ -105,6 +105,20 @@ bool Renderer::Init(HINSTANCE hInstance, HWND hWnd) {
     }
 
     if (SUCCEEDED(hr)) {
+        m_pRenderTexture = new RenderTexture;
+        if (!m_pRenderTexture) {
+            hr = S_FALSE;
+        }
+    }
+
+    if (SUCCEEDED(hr)) {
+        m_pPostEffect = new PostEffect;
+        if (!m_pPostEffect) {
+            hr = S_FALSE;
+        }
+    }
+
+    if (SUCCEEDED(hr)) {
         hr = m_pCamera->Init();
     }
 
@@ -114,6 +128,14 @@ bool Renderer::Init(HINSTANCE hInstance, HWND hWnd) {
 
     if (SUCCEEDED(hr)) {
         hr = m_pScene->Init(m_pDevice, m_pContext, m_width, m_height);
+    }
+
+    if (SUCCEEDED(hr)) {
+        hr = m_pRenderTexture->Init(m_pDevice, m_width, m_height);
+    }
+
+    if (SUCCEEDED(hr)) {
+        hr = m_pPostEffect->Init(m_pDevice, hWnd);
     }
 
     // Setup Platform/Renderer backends
@@ -231,21 +253,16 @@ bool Renderer::Frame() {
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    //static bool demoWindow = false;
     static bool myWindow = true;
+    static bool instances = true;
     static bool isSpheresOn = true;
     static bool useNormalMap = true;
     static bool showNormals = false;
-    //if (demoWindow) {
-    //    ImGui::ShowDemoWindow(&demoWindow);
-    //}
+    static bool isGrayScale = true;
+    static bool isCullingOn = true;
 
     if (myWindow) {
-        ImGui::Begin("ImGui", &myWindow);
-
-        //if (ImGui::Button("Open demo")) {
-        //    demoWindow = true;
-        //}
+        ImGui::Begin("Lights", &myWindow);
 
         if (ImGui::Checkbox("Show bulbs", &isSpheresOn)) {
             m_pScene->ToggleSpheres();
@@ -259,35 +276,64 @@ bool Renderer::Frame() {
             m_pScene->ToggleShowNormals();
         }
 
+        if (ImGui::Checkbox("Gray Scale", &isGrayScale)) {
+            m_pPostEffect->ToggleGrayScale(m_pContext);
+        }
+
         if (ImGui::Button("+")) {
-            m_pScene->CreateNewLight(m_pDevice, m_pContext);
+            m_pScene->CreateNewLight();
         }
         ImGui::SameLine();
         if (ImGui::Button("-")) {
             m_pScene->DeleteLight();
         }
 
-        std::vector<Light> lights = m_pScene->passLightToRender();
+        auto& lightPosColorVector = m_pScene->GetLightVector();
         static float col[MAX_LIGHT][3];
         static float pos[MAX_LIGHT][4];
-        for (int i = 0; i < lights.size(); i++) {
+        for (int i = 0; i < lightPosColorVector.size(); i++) {
             std::string str = "Light " + std::to_string(i);
             ImGui::Text(str.c_str());
 
+            pos[i][0] = lightPosColorVector[i].first.x;
+            pos[i][1] = lightPosColorVector[i].first.y;
+            pos[i][2] = lightPosColorVector[i].first.z;
             str = "Pos " + std::to_string(i);
             ImGui::Text(str.c_str());
-            ImGui::DragFloat3(str.c_str(), pos[i], 0.01f, -1.0f, 1.0f);
-            lights[i].SetPosition(pos[i][0], pos[i][1], pos[i][2], 1.0f);
+            ImGui::DragFloat3(str.c_str(), pos[i], 0.1f, -10.0f, 10.0f);
+            lightPosColorVector[i].first = XMFLOAT3(pos[i][0], pos[i][1], pos[i][2]);
 
-            col[i][0] = lights[i].GetColor().x;
-            col[i][1] = lights[i].GetColor().y;
-            col[i][2] = lights[i].GetColor().z;
+            col[i][0] = lightPosColorVector[i].second.x;
+            col[i][1] = lightPosColorVector[i].second.y;
+            col[i][2] = lightPosColorVector[i].second.z;
             str = "Color " + std::to_string(i);
             ImGui::ColorEdit3(str.c_str() , col[i]);
-            lights[i].SetColor(col[i][0], col[i][1], col[i][2], 1.0f);
+            lightPosColorVector[i].second = XMFLOAT3(col[i][0], col[i][1], col[i][2]);
         }
 
-        m_pScene->getLightFromRender(lights);
+        ImGui::End();
+    }
+
+    if (instances) {
+        ImGui::Begin("Instances", &instances);
+
+        if (ImGui::Button("+")) {
+            m_pScene->CreateNewCube();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("-")) {
+            m_pScene->DeleteCube();
+        }
+
+        std::string str = "Count: " + std::to_string(m_pScene->GetCubeCount());
+        ImGui::Text(str.c_str());
+        str = "Rendered: " + std::to_string(m_pScene->GetCubeRendered());
+        ImGui::Text(str.c_str());
+        str = "Culled: " + std::to_string(m_pScene->GetCubeCulled());
+        ImGui::Text(str.c_str());
+        if (ImGui::Checkbox("Cull", &isCullingOn)) {
+            m_pScene->ToggleCulling();
+        }
 
         ImGui::End();
     }
@@ -296,25 +342,16 @@ bool Renderer::Frame() {
     m_pInput->Frame();
 
     HandleMovementInput();
-
-    // Update our time
-    static float t = 0.0f;
-    static ULONGLONG timeStart = 0;
-    ULONGLONG timeCur = GetTickCount64();
-    if (timeStart == 0) {
-        timeStart = timeCur;
-    }
-    t = (timeCur - timeStart) / 1000.0f;
     
     // Get the world matrix
-    XMMATRIX mWorld = XMMatrixRotationY(t) * XMMatrixTranslation(m_cubePos.x, m_cubePos.y, m_cubePos.z);
+    XMMATRIX mWorld = XMMatrixIdentity();
 
     // Get the view matrix
     XMMATRIX mView;
     m_pCamera->GetBaseViewMatrix(mView);
 
     // Get the projection matrix
-    XMMATRIX mProjection = XMMatrixPerspectiveFovLH(XM_PIDIV2, m_width / (FLOAT)m_height, 100.0f, 0.1f);
+    XMMATRIX mProjection = XMMatrixPerspectiveFovLH(XM_PIDIV2, m_width / (FLOAT)m_height, SCREEN_FAR, SCREEN_NEAR);
 
     ImGui::Render();
 
@@ -326,13 +363,6 @@ bool Renderer::Frame() {
 // Render the frame
 bool Renderer::Render() {
     m_pContext->ClearState();
-
-    ID3D11RenderTargetView* views[] = { m_pBackBufferRTV };
-    m_pContext->OMSetRenderTargets(1, views, m_pDepthBufferDSV);
-
-    static const FLOAT BackColor[4] = { 0.1f, 0.1f, 0.1f, 1.0f };
-    m_pContext->ClearRenderTargetView(m_pBackBufferRTV, BackColor);
-    m_pContext->ClearDepthStencilView(m_pDepthBufferDSV, D3D11_CLEAR_DEPTH, 0.0f, 0);
 
     D3D11_VIEWPORT viewport;
     viewport.TopLeftX = 0;
@@ -350,8 +380,21 @@ bool Renderer::Render() {
     rect.bottom = m_height;
     m_pContext->RSSetScissorRects(1, &rect);
 
-    // Render scene
+    // Render scene to texture
+    m_pRenderTexture->SetRenderTarget(m_pContext, m_pDepthBufferDSV);
+    m_pRenderTexture->ClearRenderTarget(m_pContext, m_pDepthBufferDSV, 0.0f, 0.0f, 0.0f, 1.0f);
     m_pScene->Render(m_pContext);
+
+    ID3D11RenderTargetView* views[] = { m_pBackBufferRTV };
+    m_pContext->OMSetRenderTargets(1, views, m_pDepthBufferDSV);
+
+    static const FLOAT BackColor[4] = { 0.1f, 0.1f, 0.1f, 1.0f };
+    m_pContext->ClearRenderTargetView(m_pBackBufferRTV, BackColor);
+    m_pContext->ClearDepthStencilView(m_pDepthBufferDSV, D3D11_CLEAR_DEPTH, 0.0f, 0);
+
+    // Render texture to screen
+    m_pPostEffect->Process(m_pContext, m_pRenderTexture->GetShaderResourceView(), m_pBackBufferRTV, viewport);
+
 
     HRESULT hr = m_pSwapChain->Present(0, 0);
     assert(SUCCEEDED(hr));
@@ -373,6 +416,8 @@ void Renderer::Cleanup() {
     SAFE_RELEASE(m_pCamera);
     SAFE_RELEASE(m_pScene);
     SAFE_RELEASE(m_pInput);
+    SAFE_RELEASE(m_pRenderTexture);
+    SAFE_RELEASE(m_pPostEffect);
 
     #ifdef _DEBUG
     if (m_pDevice != nullptr) {
@@ -406,6 +451,7 @@ bool Renderer::Resize(UINT width, UINT height) {
             hr = SetupBackBuffer();
             m_pInput->Resize(width, height);
             m_pScene->Resize(width, height);
+            m_pRenderTexture->Resize(m_pDevice, width, height);
         }
         return SUCCEEDED(hr);
     }
@@ -427,7 +473,7 @@ HRESULT Renderer::SetupBackBuffer() {
         SAFE_RELEASE(m_pDepthBuffer);
         SAFE_RELEASE(m_pDepthBufferDSV);
         D3D11_TEXTURE2D_DESC desc = {};
-        desc.Format = DXGI_FORMAT_D16_UNORM;
+        desc.Format = DXGI_FORMAT_D32_FLOAT;
         desc.ArraySize = 1;
         desc.MipLevels = 1;
         desc.Usage = D3D11_USAGE_DEFAULT;

@@ -27,6 +27,28 @@ HRESULT Scene::Init(ID3D11Device* device, ID3D11DeviceContext* context, int scre
         hr = m_pCubeMap->Init(device, context, screenWidth, screenHeight);
     }
 
+    if (SUCCEEDED(hr)) {
+        m_pLight = new Light;
+        if (!m_pLight) {
+            hr = S_FALSE;
+        }
+    }
+
+    if (SUCCEEDED(hr)) {
+        hr = m_pLight->Init(device, context);
+    }
+
+    if (SUCCEEDED(hr)) {
+        m_pFrustum = new Frustum;
+        if (!m_pFrustum) {
+            hr = S_FALSE;
+        }
+    }
+
+    if (SUCCEEDED(hr)) {
+        m_pFrustum->Init(SCREEN_NEAR);
+    }
+
     if (FAILED(hr)) {
         Release();
     }
@@ -36,6 +58,15 @@ HRESULT Scene::Init(ID3D11Device* device, ID3D11DeviceContext* context, int scre
 
 HRESULT Scene::InitScene(ID3D11Device* device, ID3D11DeviceContext* context) {
     HRESULT hr = S_OK;
+
+    // Set up cubes
+    for (int i = 0; i < MAX_CUBE; i++) {
+        CubeModel tmp;
+        float textureIndex = (float)(rand() % 2);
+        tmp.pos = XMFLOAT4((float)(rand() % 10 - 5), (float)(rand() % 10 - 5), (float)(rand() % 10 - 5), (float)(rand() % 6 - 3));
+        tmp.shineSpeedIdNM = XMFLOAT4(300.0f, (float)(rand() % 5), textureIndex, textureIndex > 0.0f ? 0.0f : 1.0f);
+        m_cubeModelVector.push_back(tmp);
+    }
 
     static const Vertex Vertices[] = {
         // Bottom face
@@ -148,37 +179,52 @@ HRESULT Scene::InitScene(ID3D11Device* device, ID3D11DeviceContext* context) {
     // Set constant buffers
     if (SUCCEEDED(hr)) {
         D3D11_BUFFER_DESC desc = {};
-        desc.ByteWidth = sizeof(WorldMatrixBuffer);
+        desc.ByteWidth = sizeof(GeomBuffer) * MAX_CUBE;
         desc.Usage = D3D11_USAGE_DEFAULT;
         desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
         desc.CPUAccessFlags = 0;
         desc.MiscFlags = 0;
         desc.StructureByteStride = 0;
 
-        WorldMatrixBuffer worldMatrixBuffer;
-        worldMatrixBuffer.mWorldMatrix = DirectX::XMMatrixIdentity();
+        GeomBuffer geomBufferInst[MAX_CUBE];
+        for (int i = 0; i < m_cubeModelVector.size(); i++) {
+            geomBufferInst[i].mWorldMatrix = XMMatrixTranslation(m_cubeModelVector[i].pos.x, m_cubeModelVector[i].pos.y, m_cubeModelVector[i].pos.z);
+            geomBufferInst[i].norm = geomBufferInst[i].mWorldMatrix;
+            geomBufferInst[i].shineSpeedTexIdNM = m_cubeModelVector[i].shineSpeedIdNM;
+        }
 
         D3D11_SUBRESOURCE_DATA data;
-        data.pSysMem = &worldMatrixBuffer;
-        data.SysMemPitch = sizeof(worldMatrixBuffer);
+        data.pSysMem = &geomBufferInst;
+        data.SysMemPitch = sizeof(geomBufferInst);
         data.SysMemSlicePitch = 0;
 
-        hr = device->CreateBuffer(&desc, &data, &m_pWorldMatrixBuffer);
-        if (SUCCEEDED(hr)) {
-            hr = device->CreateBuffer(&desc, &data, &m_pWorldMatrixBuffer2);
-        }
+        hr = device->CreateBuffer(&desc, &data, &m_pGeomBufferInst);
         assert(SUCCEEDED(hr));
     }
+
     if (SUCCEEDED(hr)) {
         D3D11_BUFFER_DESC desc = {};
-        desc.ByteWidth = sizeof(SceneMatrixBuffer);
+        desc.ByteWidth = sizeof(SceneConstantBuffer);
         desc.Usage = D3D11_USAGE_DYNAMIC;
         desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
         desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
         desc.MiscFlags = 0;
         desc.StructureByteStride = 0;
 
-        hr = device->CreateBuffer(&desc, nullptr, &m_pSceneMatrixBuffer);
+        hr = device->CreateBuffer(&desc, nullptr, &m_pSceneConstantBuffer);
+        assert(SUCCEEDED(hr));
+    }
+
+    if (SUCCEEDED(hr)) {
+        D3D11_BUFFER_DESC desc = {};
+        desc.ByteWidth = sizeof(LightConstantBuffer);
+        desc.Usage = D3D11_USAGE_DYNAMIC;
+        desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        desc.MiscFlags = 0;
+        desc.StructureByteStride = 0;
+
+        hr = device->CreateBuffer(&desc, nullptr, &m_pLightConstantBuffer);
         assert(SUCCEEDED(hr));
     }
 
@@ -202,7 +248,7 @@ HRESULT Scene::InitScene(ID3D11Device* device, ID3D11DeviceContext* context) {
 
     if (SUCCEEDED(hr)) {
         Texture tmp;
-        hr = tmp.Init(device, context, L"data/brick_diffuse.dds");
+        hr = tmp.InitArray(device, context, { L"data/brick_diffuse.dds", L"data/morgana.dds" });
         m_textureArray.push_back(tmp);
     }
 
@@ -241,14 +287,6 @@ HRESULT Scene::InitScene(ID3D11Device* device, ID3D11DeviceContext* context) {
 
         hr = device->CreateDepthStencilState(&dsDesc, &m_pDepthState);
         assert(SUCCEEDED(hr));
-    }
-
-    if (SUCCEEDED(hr)) {
-        // Init one light
-        Light l;
-        hr = l.Init(device, context);
-        assert(SUCCEEDED(hr));
-        m_lights.push_back(l);
     }
 
     return hr;
@@ -311,7 +349,7 @@ HRESULT Scene::InitSceneTransparent(ID3D11Device* device, ID3D11DeviceContext* c
     D3D_SHADER_MACRO Shader_Macros[] = { {"USE_LIGHTS"}, {NULL, NULL} };
 
     if (SUCCEEDED(hr)) {
-        hr = D3DCompileFromFile(L"TransVertexShader.hlsl", NULL, NULL, "main", "vs_5_0", flags, 0, &vertexShaderBuffer, NULL);
+        hr = D3DCompileFromFile(L"TransVertexShader.hlsl", Shader_Macros, &includeObj, "main", "vs_5_0", flags, 0, &vertexShaderBuffer, NULL);
         hr = device->CreateVertexShader(vertexShaderBuffer->GetBufferPointer(), vertexShaderBuffer->GetBufferSize(), NULL, &m_pTransVertexShader);
     }
     if (SUCCEEDED(hr)) {
@@ -410,9 +448,9 @@ void Scene::Release() {
     SAFE_RELEASE(m_pInputLayout);
     SAFE_RELEASE(m_pVertexShader);
     SAFE_RELEASE(m_pRasterizerState);
-    SAFE_RELEASE(m_pSceneMatrixBuffer);
-    SAFE_RELEASE(m_pWorldMatrixBuffer);
-    SAFE_RELEASE(m_pWorldMatrixBuffer2);
+    SAFE_RELEASE(m_pSceneConstantBuffer);
+    SAFE_RELEASE(m_pLightConstantBuffer);
+    SAFE_RELEASE(m_pGeomBufferInst);
     SAFE_RELEASE(m_pPixelShader);
     SAFE_RELEASE(m_pSampler);
     SAFE_RELEASE(m_pDepthState);
@@ -427,30 +465,49 @@ void Scene::Release() {
     SAFE_RELEASE(m_pTransDepthState);
     SAFE_RELEASE(m_pTransBlendState);
     SAFE_RELEASE(m_pCubeMap);
+    SAFE_RELEASE(m_pLight);
+    SAFE_RELEASE(m_pFrustum);
 
     for (auto& t : m_textureArray) {
         t.Shutdown();
     }
     m_textureArray.clear();
-
-    for (auto& t : m_lights) {
-        t.Shutdown();
-    }
-    m_lights.clear();
 }
 
 bool Scene::Frame(ID3D11DeviceContext* context, XMMATRIX worldMatrix, XMMATRIX viewMatrix, XMMATRIX projectionMatrix, XMFLOAT3 cameraPos) {
-    WorldMatrixBuffer worldMatrixBuffer;
-    // Update world matrix 1
-    worldMatrixBuffer.mWorldMatrix = worldMatrix * XMMatrixTranslation(-1.0f, 0.0f, 0.0f);
-    worldMatrixBuffer.color = XMFLOAT4(300.0f, 0.0f, 0.0f, 0.0f);
+    // Update our time
+    static float t = 0.0f;
+    static ULONGLONG timeStart = 0;
+    ULONGLONG timeCur = GetTickCount64();
+    if (timeStart == 0) {
+        timeStart = timeCur;
+    }
+    t = (timeCur - timeStart) / 1000.0f;
 
-    context->UpdateSubresource(m_pWorldMatrixBuffer, 0, nullptr, &worldMatrixBuffer, 0, 0);
-    // Update world matrix 2
-    worldMatrixBuffer.mWorldMatrix = XMMatrixTranslation(2.0f, 0.0f, 2.0f);
+    GeomBuffer geomBufferInst[MAX_CUBE];
+    for (int i = 0; i < m_cubesCount; i++) {
+        geomBufferInst[i].mWorldMatrix = XMMatrixRotationY(m_cubeModelVector[i].pos.w * t * m_cubeModelVector[i].shineSpeedIdNM.y) * XMMatrixTranslation(m_cubeModelVector[i].pos.x, m_cubeModelVector[i].pos.y, m_cubeModelVector[i].pos.z);
+        geomBufferInst[i].norm = geomBufferInst[i].mWorldMatrix;
+        geomBufferInst[i].shineSpeedTexIdNM = m_cubeModelVector[i].shineSpeedIdNM;
+    }
 
-    context->UpdateSubresource(m_pWorldMatrixBuffer2, 0, nullptr, &worldMatrixBuffer, 0, 0);
+    context->UpdateSubresource(m_pGeomBufferInst, 0, nullptr, &geomBufferInst, 0, 0);
+
+    // Calculate frustum
+    m_pFrustum->ConstructFrustum(viewMatrix, projectionMatrix);
+    // Find cubes in frustum
+    m_cubeIndexies.clear();
+    for (int i = 0; i < m_cubesCount; i++) {
+        XMFLOAT4 min, max;
+        XMStoreFloat4(&min, XMVector4Transform(XMLoadFloat4(&AABB[0]), geomBufferInst[i].mWorldMatrix));
+        XMStoreFloat4(&max, XMVector4Transform(XMLoadFloat4(&AABB[1]), geomBufferInst[i].mWorldMatrix));
+        if (!m_isCullingOn || m_pFrustum->CheckRectangle(max.x, max.y, max.z, min.x, min.y, min.z)) {
+            m_cubeIndexies.push_back(i);
+        }
+    }
+
     // Update transparent world matrix
+    WorldMatrixBuffer worldMatrixBuffer;
     worldMatrixBuffer.mWorldMatrix = XMMatrixTranslation(0.8f, 0.3f, 1.1f);
     worldMatrixBuffer.color = XMFLOAT4(0.6f, 0.0f, 1.0f, 0.5f); // purple
     context->UpdateSubresource(m_pTransWorldMatrixBuffer, 0, nullptr, &worldMatrixBuffer, 0, 0);
@@ -483,50 +540,68 @@ bool Scene::Frame(ID3D11DeviceContext* context, XMMATRIX worldMatrix, XMMATRIX v
 
     // Update Scene matrix
     D3D11_MAPPED_SUBRESOURCE subresource;
-    HRESULT hr = context->Map(m_pSceneMatrixBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &subresource);
+    HRESULT hr = context->Map(m_pSceneConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &subresource);
     assert(SUCCEEDED(hr));
+
     if (SUCCEEDED(hr)) {
-        SceneMatrixBuffer& sceneBuffer = *reinterpret_cast<SceneMatrixBuffer*>(subresource.pData);
+        SceneConstantBuffer& sceneBuffer = *reinterpret_cast<SceneConstantBuffer*>(subresource.pData);
         sceneBuffer.mViewProjectionMatrix = XMMatrixMultiply(viewMatrix, projectionMatrix);
-        sceneBuffer.cameraPos = XMFLOAT4(cameraPos.x, cameraPos.y, cameraPos.z, 1.0f);
-        sceneBuffer.ambientColor = XMFLOAT4(0.4f, 0.4f, 0.4f, 1.0f);
-        sceneBuffer.lightCount = XMINT4(int(m_lights.size()), m_useNormalMap ? 1 : 0, m_showNormals ? 1 : 0, 0);
-        for (int i = 0; i < m_lights.size(); i++) {
-            sceneBuffer.lightPos[i] = m_lights[i].GetPosition();
-            sceneBuffer.lightColor[i] = m_lights[i].GetColor();
+        for (int i = 0; i < m_cubeIndexies.size(); i++) {
+            sceneBuffer.indexBuffer[i] = XMINT4(m_cubeIndexies[i], 0, 0, 0);
         }
-        context->Unmap(m_pSceneMatrixBuffer, 0);
+        context->Unmap(m_pSceneConstantBuffer, 0);
     }
 
-    for (auto& l : m_lights) {
-        l.Frame(context, viewMatrix, projectionMatrix);
+    // Update Light buffer
+    hr = context->Map(m_pLightConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &subresource);
+    assert(SUCCEEDED(hr));
+
+    if (SUCCEEDED(hr)) {
+        LightConstantBuffer& lightBuffer = *reinterpret_cast<LightConstantBuffer*>(subresource.pData);
+        lightBuffer.cameraPos = XMFLOAT4(cameraPos.x, cameraPos.y, cameraPos.z, 1.0f);
+        lightBuffer.ambientColor = XMFLOAT4(0.9f, 0.9f, 0.9f, 1.0f);
+        auto& lightPosColorVector = m_pLight->GetLightVector();
+        lightBuffer.lightCount = XMINT4(int(lightPosColorVector.size()), m_useNormalMap ? 1 : 0, m_showNormals ? 1 : 0, 0);
+        for (int i = 0; i < lightPosColorVector.size(); i++) {
+            lightBuffer.lightPos[i] = XMFLOAT4(lightPosColorVector[i].first.x, lightPosColorVector[i].first.y, lightPosColorVector[i].first.z, 1.0f);
+            lightBuffer.lightColor[i] = XMFLOAT4(lightPosColorVector[i].second.x, lightPosColorVector[i].second.y, lightPosColorVector[i].second.z, 1.0f);
+        }
+        context->Unmap(m_pLightConstantBuffer, 0);
     }
 
+    m_pLight->Frame(context, viewMatrix, projectionMatrix);
     m_pCubeMap->Frame(context, viewMatrix, projectionMatrix, cameraPos);
 
     return SUCCEEDED(hr);
 }
 
-HRESULT Scene::CreateNewLight(ID3D11Device* device, ID3D11DeviceContext* context) {
-    HRESULT hr = S_OK;
-
-    if (m_lights.size() < MAX_LIGHT) {
-        // Init one light
-        Light l;
-        hr = l.Init(device, context);
-        assert(SUCCEEDED(hr));
-        m_lights.push_back(l);
+void Scene::CreateNewLight() {
+    auto& lightPosColorVector = m_pLight->GetLightVector();
+    if (lightPosColorVector.size() < MAX_LIGHT) {
+        lightPosColorVector.push_back(std::pair<XMFLOAT3, XMFLOAT3>(
+            XMFLOAT3(0.0f, 1.0f, 0.0f),
+            XMFLOAT3(1.0f, 1.0f, 1.0f)));
     }
-
-    return hr;
 }
 
 void Scene::DeleteLight() {
-    if (!m_lights.empty()) {
-        m_lights[m_lights.size() - 1].Shutdown();
-        m_lights.pop_back();
+    auto& lightPosColorVector = m_pLight->GetLightVector();
+    if (!lightPosColorVector.empty()) {
+        lightPosColorVector.pop_back();
     }
 };
+
+void Scene::CreateNewCube() {
+    if (m_cubesCount < MAX_CUBE) {
+        m_cubesCount++;
+    }
+}
+
+void Scene::DeleteCube() {
+    if (m_cubesCount > 0) {
+        m_cubesCount--;
+    }
+}
 
 void Scene::Render(ID3D11DeviceContext* context) {
     context->OMSetDepthStencilState(m_pDepthState, 0);
@@ -547,37 +622,24 @@ void Scene::Render(ID3D11DeviceContext* context) {
     context->IASetInputLayout(m_pInputLayout);
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     context->VSSetShader(m_pVertexShader, nullptr, 0);
-    context->VSSetConstantBuffers(1, 1, &m_pSceneMatrixBuffer);
+    context->VSSetConstantBuffers(0, 1, &m_pGeomBufferInst);
+    context->VSSetConstantBuffers(1, 1, &m_pSceneConstantBuffer);
     context->PSSetShader(m_pPixelShader, nullptr, 0);
-    context->PSSetConstantBuffers(0, 1, &m_pWorldMatrixBuffer);
-    context->PSSetConstantBuffers(1, 1, &m_pSceneMatrixBuffer);
-
-    // Draw first cube
-    {
-        context->VSSetConstantBuffers(0, 1, &m_pWorldMatrixBuffer);
-        context->DrawIndexed(36, 0, 0);
-    }
-
-    // Draw second cube
-    {
-        context->VSSetConstantBuffers(0, 1, &m_pWorldMatrixBuffer2);
-        context->DrawIndexed(36, 0, 0);
-    }
+    context->PSSetConstantBuffers(0, 1, &m_pGeomBufferInst);
+    context->PSSetConstantBuffers(1, 1, &m_pSceneConstantBuffer);
+    context->PSSetConstantBuffers(2, 1, &m_pLightConstantBuffer);
+    context->DrawIndexedInstanced(36, (UINT)m_cubeIndexies.size(), 0, 0, 0);
 
     // Render Spheres
     if (m_isSpheresOn) {
-        for (auto& l : m_lights) {
-            l.Render(context);
-        }
+        m_pLight->Render(context);
     }
-
     m_pCubeMap->Render(context);
 
     RenderTransparent(context);
 
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }
-
 
 void Scene::RenderTransparent(ID3D11DeviceContext* context) {
     context->IASetIndexBuffer(m_pTransIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
@@ -593,7 +655,8 @@ void Scene::RenderTransparent(ID3D11DeviceContext* context) {
 
     context->VSSetShader(m_pTransVertexShader, nullptr, 0);
     context->PSSetShader(m_pTransPixelShader, nullptr, 0);
-    context->VSSetConstantBuffers(1, 1, &m_pSceneMatrixBuffer);
+    context->VSSetConstantBuffers(1, 1, &m_pSceneConstantBuffer);
+    context->PSSetConstantBuffers(2, 1, &m_pLightConstantBuffer);
 
     context->OMSetBlendState(m_pTransBlendState, nullptr, 0xFFFFFFFF);
     context->OMSetDepthStencilState(m_pTransDepthState, 0);

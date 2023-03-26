@@ -3,12 +3,15 @@
 
 #include <d3d11.h>
 #include <stdio.h>
+#include <vector>
 #include "DDSTextureLoader.h"
 
 class Texture {
 public:
     // Function to initialize texture
     HRESULT Init(ID3D11Device* device, ID3D11DeviceContext* deviceContext, const wchar_t* filename);
+    // Funnction to initialize texture array
+    HRESULT InitArray(ID3D11Device* device, ID3D11DeviceContext* deviceContext, std::vector<const wchar_t*> filenames);
     // Function to realese texture
     void Shutdown();
 

@@ -72,6 +72,15 @@
     <ClCompile Include="D3DInclude.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="frustum.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="renderTexture.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="postEffect.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="renderer.h">
@@ -137,6 +146,24 @@
     <ClInclude Include="D3DInclude.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="defines.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="CBTrans.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="CBLight.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="frustum.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="renderTexture.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="postEffect.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Window.rc">
@@ -150,5 +177,7 @@
     <FxCompile Include="CubeMapVertexShader.hlsl" />
     <FxCompile Include="TransVertexShader.hlsl" />
     <FxCompile Include="TransPixelShader.hlsl" />
+    <FxCompile Include="PostEffectVertexShader.hlsl" />
+    <FxCompile Include="PostEffectPixelShader.hlsl" />
   </ItemGroup>
 </Project>

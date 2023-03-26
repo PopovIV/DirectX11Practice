@@ -1,11 +1,15 @@
 #include "light.h"
 
 // Initialize all needed instances
-HRESULT Light::Init(ID3D11Device* device, ID3D11DeviceContext* context, XMFLOAT4 color, XMFLOAT4 position) {
+HRESULT Light::Init(ID3D11Device* device, ID3D11DeviceContext* context) {
     HRESULT hr = S_OK;
 
-    m_color = color;
-    m_position = position;
+    // Set up lights
+    for (int i = 0; i < MAX_LIGHT; i++) {
+        m_posColorVector.push_back(std::pair<XMFLOAT3, XMFLOAT3>(
+            XMFLOAT3((float)(rand() % 10 - 5), (float)(rand() % 10 - 5), (float)(rand() % 10 - 5)),
+            XMFLOAT3(1.0f, (rand() % 255) / 255.0f, (rand() % 255) / 255.0f)));
+    }
 
     UINT LatLines = 10;
     UINT LongLines = 10;
@@ -140,11 +144,11 @@ HRESULT Light::Init(ID3D11Device* device, ID3D11DeviceContext* context, XMFLOAT4
     D3DInclude includeObj;
 
     if (SUCCEEDED(hr)) {
-        hr = D3DCompileFromFile(L"TransVertexShader.hlsl", NULL, NULL, "main", "vs_5_0", flags, 0, &vertexShaderBuffer, NULL);
+        hr = D3DCompileFromFile(L"TransVertexShader.hlsl", NULL, &includeObj, "main", "vs_5_0", flags, 0, &vertexShaderBuffer, NULL);
         hr = device->CreateVertexShader(vertexShaderBuffer->GetBufferPointer(), vertexShaderBuffer->GetBufferSize(), NULL, &m_pVertexShader);
     }
     if (SUCCEEDED(hr)) {
-        hr = D3DCompileFromFile(L"TransPixelShader.hlsl", NULL,&includeObj, "main", "ps_5_0", flags, 0, &pixelShaderBuffer, NULL);
+        hr = D3DCompileFromFile(L"TransPixelShader.hlsl", NULL, &includeObj, "main", "ps_5_0", flags, 0, &pixelShaderBuffer, NULL);
         hr = device->CreatePixelShader(pixelShaderBuffer->GetBufferPointer(), pixelShaderBuffer->GetBufferSize(), NULL, &m_pPixelShader);
     }
     if (SUCCEEDED(hr)) {
@@ -158,19 +162,22 @@ HRESULT Light::Init(ID3D11Device* device, ID3D11DeviceContext* context, XMFLOAT4
     // Set constant buffers
     if (SUCCEEDED(hr)) {
         D3D11_BUFFER_DESC desc = {};
-        desc.ByteWidth = sizeof(WorldMatrixBuffer);
+        desc.ByteWidth = sizeof(GeomBuffer) * MAX_LIGHT;
         desc.Usage = D3D11_USAGE_DEFAULT;
         desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
         desc.CPUAccessFlags = 0;
         desc.MiscFlags = 0;
         desc.StructureByteStride = 0;
 
-        WorldMatrixBuffer worldMatrixBuffer;
-        worldMatrixBuffer.mWorldMatrix = DirectX::XMMatrixIdentity();
+        GeomBuffer geomBufferInst[MAX_LIGHT];
+        for (int i = 0; i < MAX_LIGHT; i++) {
+            geomBufferInst[i].mWorldMatrix = DirectX::XMMatrixScaling(0.1f, 0.1f, 0.1f) * XMMatrixTranslation(m_posColorVector[i].first.x, m_posColorVector[i].first.y, m_posColorVector[i].first.z);
+            geomBufferInst[i].color = XMFLOAT4(m_posColorVector[i].second.x, m_posColorVector[i].second.y, m_posColorVector[i].second.z, 1.0f);
+        }
 
         D3D11_SUBRESOURCE_DATA data;
-        data.pSysMem = &worldMatrixBuffer;
-        data.SysMemPitch = sizeof(worldMatrixBuffer);
+        data.pSysMem = &geomBufferInst;
+        data.SysMemPitch = sizeof(geomBufferInst);
         data.SysMemSlicePitch = 0;
 
         hr = device->CreateBuffer(&desc, &data, &m_pWorldMatrixBuffer);
@@ -208,14 +215,14 @@ HRESULT Light::Init(ID3D11Device* device, ID3D11DeviceContext* context, XMFLOAT4
     }
 
     if (FAILED(hr)) {
-        Shutdown();
+        Release();
     }
 
     return hr;
 }
 
 // Clean up all the objects we've created
-void Light::Shutdown() {
+void Light::Release() {
     SAFE_RELEASE(m_pVertexBuffer);
     SAFE_RELEASE(m_pIndexBuffer);
     SAFE_RELEASE(m_pInputLayout);
@@ -224,16 +231,17 @@ void Light::Shutdown() {
     SAFE_RELEASE(m_pSceneMatrixBuffer);
     SAFE_RELEASE(m_pWorldMatrixBuffer);
     SAFE_RELEASE(m_pPixelShader);
+    m_posColorVector.clear();
 }
 
 bool Light::Frame(ID3D11DeviceContext* context, XMMATRIX viewMatrix, XMMATRIX projectionMatrix) {
-    // Update world matrix
-    WorldMatrixBuffer worldMatrixBuffer;
+    GeomBuffer geomBufferInst[MAX_LIGHT];
+    for (int i = 0; i < m_posColorVector.size(); i++) {
+        geomBufferInst[i].mWorldMatrix = DirectX::XMMatrixScaling(0.1f, 0.1f, 0.1f) * XMMatrixTranslation(m_posColorVector[i].first.x, m_posColorVector[i].first.y, m_posColorVector[i].first.z);
+        geomBufferInst[i].color = XMFLOAT4(m_posColorVector[i].second.x, m_posColorVector[i].second.y, m_posColorVector[i].second.z, 1.0f);
+    }
 
-    worldMatrixBuffer.mWorldMatrix = DirectX::XMMatrixScaling(0.1f, 0.1f, 0.1f) * DirectX::XMMatrixTranslation(m_position.x, m_position.y, m_position.z);
-    worldMatrixBuffer.color = m_color;
-
-    context->UpdateSubresource(m_pWorldMatrixBuffer, 0, nullptr, &worldMatrixBuffer, 0, 0);
+    context->UpdateSubresource(m_pWorldMatrixBuffer, 0, nullptr, &geomBufferInst, 0, 0);
 
     // Update Scene matrix
     D3D11_MAPPED_SUBRESOURCE subresource;
@@ -264,5 +272,5 @@ void Light::Render(ID3D11DeviceContext* context) {
     context->PSSetConstantBuffers(0, 1, &m_pWorldMatrixBuffer);
     context->PSSetShader(m_pPixelShader, nullptr, 0);
 
-    context->DrawIndexed(m_numSphereFaces * 3, 0, 0);
+    context->DrawIndexedInstanced(m_numSphereFaces * 3, (UINT)m_posColorVector.size(), 0 ,0, 0);
 }
