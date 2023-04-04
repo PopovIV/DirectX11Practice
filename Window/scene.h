@@ -57,7 +57,13 @@ private:
 
     struct SceneConstantBuffer {
         XMMATRIX mViewProjectionMatrix;
-        XMINT4 indexBuffer[MAX_CUBE];
+        XMFLOAT4 planes[6];
+    };
+
+    struct CullParams {
+        XMINT4 numShapes; // x - objects count;
+        XMFLOAT4 bbMin[MAX_CUBE];
+        XMFLOAT4 bbMax[MAX_CUBE];
     };
 
     struct LightConstantBuffer {
@@ -92,27 +98,33 @@ public:
     void ToggleNormalMaps() { m_useNormalMap = !m_useNormalMap; };
     void ToggleShowNormals() { m_showNormals = !m_showNormals; };
     void ToggleCulling() { m_isCullingOn = !m_isCullingOn; };
+    void ToggleGPUCulling() { m_computeCull = !m_computeCull; };
+    void GPUCullingOFF() { m_computeCull = false; };
     // Get light info vector
     std::vector<std::pair<XMFLOAT3, XMFLOAT3>>& GetLightVector() { return  m_pLight->GetLightVector(); };
     // Get cube count
     int GetCubeCount() { return m_cubesCount; };
-    int GetCubeRendered() { return (int)m_cubeIndexies.size(); };
-    int GetCubeCulled() { return m_cubesCount - (int)m_cubeIndexies.size(); };
+    int GetCubeRendered() { return m_computeCull ? m_cubesCountGPU : (int)m_cubeIndexies.size(); };
+    int GetCubeCulled() { return m_computeCull ? m_cubesCount - m_cubesCountGPU : m_cubesCount - (int)m_cubeIndexies.size(); };
 private:
     std::vector<CubeModel> m_cubeModelVector;
     std::vector<int> m_cubeIndexies;
     int m_cubesCount = MAX_CUBE;
+    int m_cubesCountGPU = MAX_CUBE;
     // Function to initialize scene's geometry
     HRESULT InitScene(ID3D11Device* device, ID3D11DeviceContext* context);
     // Function to initialize transperent scene's geometry
     HRESULT InitSceneTransparent(ID3D11Device* device, ID3D11DeviceContext* context);
     // Render transperent part
     void RenderTransparent(ID3D11DeviceContext* context);
+    // Function to get info from Queries
+    void ReadQueries(ID3D11DeviceContext* context);
 
     ID3D11Buffer* m_pVertexBuffer = nullptr;
     ID3D11Buffer* m_pIndexBuffer = nullptr;
     ID3D11Buffer* m_pGeomBufferInst = nullptr;
     ID3D11Buffer* m_pSceneConstantBuffer = nullptr;
+    ID3D11Buffer* m_pCullParams = nullptr;
     ID3D11Buffer* m_pLightConstantBuffer = nullptr;
     ID3D11RasterizerState* m_pRasterizerState = nullptr;
     ID3D11SamplerState* m_pSampler = nullptr;
@@ -129,16 +141,28 @@ private:
     ID3D11InputLayout* m_pInputLayout = nullptr;
     ID3D11VertexShader* m_pVertexShader = nullptr;
     ID3D11PixelShader* m_pPixelShader = nullptr;
+    ID3D11ComputeShader* m_pCullShader = nullptr;
 
     ID3D11InputLayout* m_pTransInputLayout = nullptr;
     ID3D11VertexShader* m_pTransVertexShader = nullptr;
     ID3D11PixelShader* m_pTransPixelShader = nullptr;
+
+    ID3D11Buffer* m_pInderectArgsSrc = nullptr;
+    ID3D11Buffer* m_pInderectArgs = nullptr;
+    ID3D11UnorderedAccessView* m_pInderectArgsUAV = nullptr;
+    ID3D11Buffer* m_pGeomBufferInstVis = nullptr;
+    ID3D11Buffer* m_pGeomBufferInstVisGpu = nullptr;
+    ID3D11UnorderedAccessView* m_pGeomBufferInstVisGpu_UAV = nullptr;
 
     CubeMap* m_pCubeMap = nullptr;
     Light* m_pLight = nullptr;
     Frustum* m_pFrustum = nullptr;
 
     std::vector<Texture> m_textureArray;
+
+    ID3D11Query* m_queries[MAX_QUERY];
+    unsigned int m_curFrame = 0;
+    unsigned int m_lastCompletedFrame = 0;
 
     // flag to know what rect to draw
     bool m_yellowRect = false;
@@ -150,4 +174,6 @@ private:
     bool m_showNormals = false;
     // flag to turn culling
     bool m_isCullingOn = true;
+    // flag to turn gpu culling
+    bool m_computeCull = true;
 };

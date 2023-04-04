@@ -260,6 +260,7 @@ bool Renderer::Frame() {
     static bool showNormals = false;
     static bool isGrayScale = true;
     static bool isCullingOn = true;
+    static bool gpuCulling = true;
 
     if (myWindow) {
         ImGui::Begin("Lights", &myWindow);
@@ -327,14 +328,29 @@ bool Renderer::Frame() {
 
         std::string str = "Count: " + std::to_string(m_pScene->GetCubeCount());
         ImGui::Text(str.c_str());
-        str = "Rendered: " + std::to_string(m_pScene->GetCubeRendered());
-        ImGui::Text(str.c_str());
-        str = "Culled: " + std::to_string(m_pScene->GetCubeCulled());
-        ImGui::Text(str.c_str());
+
+        if (!gpuCulling) {
+            str = "Rendered: " + std::to_string(m_pScene->GetCubeRendered());
+            ImGui::Text(str.c_str());
+            str = "Culled: " + std::to_string(m_pScene->GetCubeCulled());
+            ImGui::Text(str.c_str());
+        } 
+        else {
+            str = "Rendered (GPU): " + std::to_string(m_pScene->GetCubeRendered());
+            ImGui::Text(str.c_str());
+            str = "Culled (GPU): " + std::to_string(m_pScene->GetCubeCulled());
+            ImGui::Text(str.c_str());
+        }
         if (ImGui::Checkbox("Cull", &isCullingOn)) {
             m_pScene->ToggleCulling();
+            m_pScene->GPUCullingOFF();
+            gpuCulling = false;
         }
-
+        if (isCullingOn) {
+            if (ImGui::Checkbox("Cull on GPU", &gpuCulling)) {
+                m_pScene->ToggleGPUCulling();
+            }
+        }
         ImGui::End();
     }
 
