@@ -343,13 +343,15 @@ bool Renderer::Frame() {
         }
         if (ImGui::Checkbox("Cull", &isCullingOn)) {
             m_pScene->ToggleCulling();
-            m_pScene->GPUCullingOFF();
-            gpuCulling = false;
         }
         if (isCullingOn) {
             if (ImGui::Checkbox("Cull on GPU", &gpuCulling)) {
                 m_pScene->ToggleGPUCulling();
             }
+        }
+        else {
+            m_pScene->GPUCullingOFF();
+            gpuCulling = false;
         }
         ImGui::End();
     }

@@ -599,7 +599,7 @@ bool Scene::Frame(ID3D11DeviceContext* context, XMMATRIX worldMatrix, XMMATRIX v
         XMFLOAT4 min, max;
         XMStoreFloat4(&min, XMVector4Transform(XMLoadFloat4(&AABB[0]), geomBufferInst[i].mWorldMatrix));
         XMStoreFloat4(&max, XMVector4Transform(XMLoadFloat4(&AABB[1]), geomBufferInst[i].mWorldMatrix));
-        if (m_pFrustum->CheckRectangle(min, max)) {
+        if (!m_isCullingOn || m_pFrustum->CheckRectangle(min, max)) {
             m_cubeIndexies.push_back(i);
         }
 
