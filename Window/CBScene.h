@@ -16,5 +16,10 @@ cbuffer GeomxBufferInst : register (b0)
 cbuffer SceneConstantBuffer : register (b1)
 {
     float4x4 mViewProjectionMatrix;
-    int4 indexBuffer[MAX_CUBE]; // x - index
+    float4 planes[6];
 };
+
+cbuffer IndexBuffer : register(b2)
+{
+    uint4 objectIDs[MAX_CUBE];
+}

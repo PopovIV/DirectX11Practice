@@ -2,3 +2,4 @@
 #define SCREEN_FAR 100.0f
 #define MAX_CUBE 50
 #define MAX_LIGHT 50
+#define MAX_QUERY 10

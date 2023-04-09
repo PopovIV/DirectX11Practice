@@ -8,6 +8,13 @@
 HRESULT Scene::Init(ID3D11Device* device, ID3D11DeviceContext* context, int screenWidth, int screenHeight) {
     HRESULT hr = S_OK;
 
+    D3D11_QUERY_DESC desc;
+    desc.Query = D3D11_QUERY_PIPELINE_STATISTICS;
+    desc.MiscFlags = 0;
+    for (int i = 0; i < MAX_QUERY && SUCCEEDED(hr); i++) {
+        hr = device->CreateQuery(&desc, &m_queries[i]);
+    }
+
     if (SUCCEEDED(hr)) {
         hr = InitScene(device, context);
     }
@@ -151,8 +158,67 @@ HRESULT Scene::InitScene(ID3D11Device* device, ID3D11DeviceContext* context) {
         assert(SUCCEEDED(hr));
     }
 
+    if (SUCCEEDED(hr)) {
+        D3D11_BUFFER_DESC desc = {};
+        desc.ByteWidth = sizeof(D3D11_DRAW_INDEXED_INSTANCED_INDIRECT_ARGS);
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+        desc.CPUAccessFlags = 0;
+        desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+        desc.StructureByteStride = sizeof(UINT);
+
+        hr = device->CreateBuffer(&desc, nullptr, &m_pInderectArgsSrc);
+        if (SUCCEEDED(hr)) {
+            hr = device->CreateUnorderedAccessView(m_pInderectArgsSrc, nullptr, &m_pInderectArgsUAV);
+        }
+        assert(SUCCEEDED(hr));
+    }
+
+    if (SUCCEEDED(hr)) {
+        D3D11_BUFFER_DESC desc = {};
+        desc.ByteWidth = sizeof(D3D11_DRAW_INDEXED_INSTANCED_INDIRECT_ARGS);
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = 0;
+        desc.CPUAccessFlags = 0;
+        desc.MiscFlags = D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+        desc.StructureByteStride = 0;
+
+        hr = device->CreateBuffer(&desc, nullptr, &m_pInderectArgs);
+        assert(SUCCEEDED(hr));
+    }
+
+    if (SUCCEEDED(hr)) {
+        D3D11_BUFFER_DESC desc = {};
+        desc.ByteWidth = sizeof(XMINT4) * MAX_CUBE;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+        desc.CPUAccessFlags = 0;
+        desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+        desc.StructureByteStride = sizeof(XMINT4);
+
+        hr = device->CreateBuffer(&desc, nullptr, &m_pGeomBufferInstVisGpu);
+        if (SUCCEEDED(hr)) {
+            hr = device->CreateUnorderedAccessView(m_pGeomBufferInstVisGpu, nullptr, &m_pGeomBufferInstVisGpu_UAV);
+        }
+        assert(SUCCEEDED(hr));
+    }
+
+    if (SUCCEEDED(hr)) {
+        D3D11_BUFFER_DESC desc = {};
+        desc.ByteWidth = sizeof(XMINT4) * MAX_CUBE;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        desc.CPUAccessFlags = 0;
+        desc.MiscFlags = 0;
+        desc.StructureByteStride = 0;
+
+        hr = device->CreateBuffer(&desc, nullptr, &m_pGeomBufferInstVis);
+        assert(SUCCEEDED(hr));
+    }
+
     ID3D10Blob* vertexShaderBuffer = nullptr;
     ID3D10Blob* pixelShaderBuffer = nullptr;
+    ID3D10Blob* computeShaderBuffer = nullptr;
     int flags = 0;
 #ifdef _DEBUG
     flags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
@@ -169,12 +235,17 @@ HRESULT Scene::InitScene(ID3D11Device* device, ID3D11DeviceContext* context) {
         hr = device->CreatePixelShader(pixelShaderBuffer->GetBufferPointer(), pixelShaderBuffer->GetBufferSize(), NULL, &m_pPixelShader);
     }
     if (SUCCEEDED(hr)) {
+        hr = D3DCompileFromFile(L"FrustumCullingShader.hlsl", NULL, &includeObj, "main", "cs_5_0", flags, 0, &computeShaderBuffer, NULL);
+        hr = device->CreateComputeShader(computeShaderBuffer->GetBufferPointer(), computeShaderBuffer->GetBufferSize(), NULL, &m_pCullShader);
+    }
+    if (SUCCEEDED(hr)) {
         int numElements = sizeof(InputDesc) / sizeof(InputDesc[0]);
         hr = device->CreateInputLayout(InputDesc, numElements, vertexShaderBuffer->GetBufferPointer(), vertexShaderBuffer->GetBufferSize(), &m_pInputLayout);
     }
 
     SAFE_RELEASE(vertexShaderBuffer);
     SAFE_RELEASE(pixelShaderBuffer);
+    SAFE_RELEASE(computeShaderBuffer);
 
     // Set constant buffers
     if (SUCCEEDED(hr)) {
@@ -187,11 +258,19 @@ HRESULT Scene::InitScene(ID3D11Device* device, ID3D11DeviceContext* context) {
         desc.StructureByteStride = 0;
 
         GeomBuffer geomBufferInst[MAX_CUBE];
+        CullParams cullParams;
         for (int i = 0; i < m_cubeModelVector.size(); i++) {
             geomBufferInst[i].mWorldMatrix = XMMatrixTranslation(m_cubeModelVector[i].pos.x, m_cubeModelVector[i].pos.y, m_cubeModelVector[i].pos.z);
             geomBufferInst[i].norm = geomBufferInst[i].mWorldMatrix;
             geomBufferInst[i].shineSpeedTexIdNM = m_cubeModelVector[i].shineSpeedIdNM;
+
+            XMFLOAT4 min, max;
+            XMStoreFloat4(&min, XMVector4Transform(XMLoadFloat4(&AABB[0]), geomBufferInst[i].mWorldMatrix));
+            XMStoreFloat4(&max, XMVector4Transform(XMLoadFloat4(&AABB[1]), geomBufferInst[i].mWorldMatrix));
+            cullParams.bbMin[i] = min;
+            cullParams.bbMax[i] = max;
         }
+        cullParams.numShapes = XMINT4(int(m_cubeModelVector.size()), 0, 0, 0);
 
         D3D11_SUBRESOURCE_DATA data;
         data.pSysMem = &geomBufferInst;
@@ -199,6 +278,12 @@ HRESULT Scene::InitScene(ID3D11Device* device, ID3D11DeviceContext* context) {
         data.SysMemSlicePitch = 0;
 
         hr = device->CreateBuffer(&desc, &data, &m_pGeomBufferInst);
+        assert(SUCCEEDED(hr));
+
+        data.pSysMem = &cullParams;
+        data.SysMemPitch = sizeof(cullParams);
+        data.SysMemSlicePitch = 0;
+        hr = device->CreateBuffer(&desc, &data, &m_pCullParams);
         assert(SUCCEEDED(hr));
     }
 
@@ -449,9 +534,11 @@ void Scene::Release() {
     SAFE_RELEASE(m_pVertexShader);
     SAFE_RELEASE(m_pRasterizerState);
     SAFE_RELEASE(m_pSceneConstantBuffer);
+    SAFE_RELEASE(m_pCullParams);
     SAFE_RELEASE(m_pLightConstantBuffer);
     SAFE_RELEASE(m_pGeomBufferInst);
     SAFE_RELEASE(m_pPixelShader);
+    SAFE_RELEASE(m_pCullShader);
     SAFE_RELEASE(m_pSampler);
     SAFE_RELEASE(m_pDepthState);
     SAFE_RELEASE(m_pTransVertexBuffer);
@@ -464,9 +551,19 @@ void Scene::Release() {
     SAFE_RELEASE(m_pTransWorldMatrixBuffer2);
     SAFE_RELEASE(m_pTransDepthState);
     SAFE_RELEASE(m_pTransBlendState);
+    SAFE_RELEASE(m_pInderectArgsSrc);
+    SAFE_RELEASE(m_pInderectArgs);
+    SAFE_RELEASE(m_pGeomBufferInstVisGpu)
+    SAFE_RELEASE(m_pGeomBufferInstVisGpu_UAV)
+    SAFE_RELEASE(m_pGeomBufferInstVis)
+    SAFE_RELEASE(m_pInderectArgsUAV);
     SAFE_RELEASE(m_pCubeMap);
     SAFE_RELEASE(m_pLight);
     SAFE_RELEASE(m_pFrustum);
+
+    for (auto& q : m_queries) {
+        q->Release();
+    }
 
     for (auto& t : m_textureArray) {
         t.Shutdown();
@@ -493,6 +590,7 @@ bool Scene::Frame(ID3D11DeviceContext* context, XMMATRIX worldMatrix, XMMATRIX v
 
     context->UpdateSubresource(m_pGeomBufferInst, 0, nullptr, &geomBufferInst, 0, 0);
 
+    CullParams cullParams;
     // Calculate frustum
     m_pFrustum->ConstructFrustum(viewMatrix, projectionMatrix);
     // Find cubes in frustum
@@ -501,10 +599,16 @@ bool Scene::Frame(ID3D11DeviceContext* context, XMMATRIX worldMatrix, XMMATRIX v
         XMFLOAT4 min, max;
         XMStoreFloat4(&min, XMVector4Transform(XMLoadFloat4(&AABB[0]), geomBufferInst[i].mWorldMatrix));
         XMStoreFloat4(&max, XMVector4Transform(XMLoadFloat4(&AABB[1]), geomBufferInst[i].mWorldMatrix));
-        if (!m_isCullingOn || m_pFrustum->CheckRectangle(max.x, max.y, max.z, min.x, min.y, min.z)) {
+        if (!m_isCullingOn || m_pFrustum->CheckRectangle(min, max)) {
             m_cubeIndexies.push_back(i);
         }
+
+        cullParams.bbMin[i] = min;
+        cullParams.bbMax[i] = max;
     }
+    cullParams.numShapes = XMINT4(m_cubesCount, 0, 0, 0);
+
+    context->UpdateSubresource(m_pCullParams, 0, nullptr, &cullParams, 0, 0);
 
     // Update transparent world matrix
     WorldMatrixBuffer worldMatrixBuffer;
@@ -546,10 +650,19 @@ bool Scene::Frame(ID3D11DeviceContext* context, XMMATRIX worldMatrix, XMMATRIX v
     if (SUCCEEDED(hr)) {
         SceneConstantBuffer& sceneBuffer = *reinterpret_cast<SceneConstantBuffer*>(subresource.pData);
         sceneBuffer.mViewProjectionMatrix = XMMatrixMultiply(viewMatrix, projectionMatrix);
-        for (int i = 0; i < m_cubeIndexies.size(); i++) {
-            sceneBuffer.indexBuffer[i] = XMINT4(m_cubeIndexies[i], 0, 0, 0);
+        XMFLOAT4* planes = m_pFrustum->GetPlanes();
+        for (int i = 0; i < 6; i++) {
+            sceneBuffer.planes[i] = planes[i];
         }
         context->Unmap(m_pSceneConstantBuffer, 0);
+    }
+
+    if (!m_computeCull) {
+        XMINT4 indexBuffer[MAX_CUBE];
+        for (int i = 0; i < m_cubeIndexies.size(); i++) {
+            indexBuffer[i] = XMINT4(m_cubeIndexies[i], 0, 0, 0);
+        }
+        context->UpdateSubresource(m_pGeomBufferInstVis, 0, nullptr, &indexBuffer, 0, 0);
     }
 
     // Update Light buffer
@@ -568,6 +681,25 @@ bool Scene::Frame(ID3D11DeviceContext* context, XMMATRIX worldMatrix, XMMATRIX v
         }
         context->Unmap(m_pLightConstantBuffer, 0);
     }
+
+    // GPU Culling
+    D3D11_DRAW_INDEXED_INSTANCED_INDIRECT_ARGS args;
+    args.IndexCountPerInstance = 36;
+    args.InstanceCount = 0;
+    args.StartInstanceLocation = 0;
+    args.BaseVertexLocation = 0;
+    args.StartIndexLocation = 0;
+    context->UpdateSubresource(m_pInderectArgsSrc, 0, nullptr, &args, 0, 0);
+    UINT groupNumber = m_cubesCount / 64u + !!(m_cubesCount % 64u);
+    context->CSSetConstantBuffers(0, 1, &m_pCullParams);
+    context->CSSetConstantBuffers(1, 1, &m_pSceneConstantBuffer);
+    context->CSSetUnorderedAccessViews(0, 1, &m_pInderectArgsUAV, nullptr);
+    context->CSSetUnorderedAccessViews(1, 1, &m_pGeomBufferInstVisGpu_UAV, nullptr);
+    context->CSSetShader(m_pCullShader, nullptr, 0);
+    context->Dispatch(groupNumber, 1, 1);
+
+    context->CopyResource(m_pGeomBufferInstVis, m_pGeomBufferInstVisGpu);
+    context->CopyResource(m_pInderectArgs, m_pInderectArgsSrc);
 
     m_pLight->Frame(context, viewMatrix, projectionMatrix);
     m_pCubeMap->Frame(context, viewMatrix, projectionMatrix, cameraPos);
@@ -603,6 +735,21 @@ void Scene::DeleteCube() {
     }
 }
 
+// Function to get info from Queries
+void Scene::ReadQueries(ID3D11DeviceContext* context) {
+    D3D11_QUERY_DATA_PIPELINE_STATISTICS stats;
+    while (m_lastCompletedFrame < m_curFrame) {
+        HRESULT hr = context->GetData(m_queries[m_lastCompletedFrame % MAX_QUERY], &stats, sizeof(D3D11_QUERY_DATA_PIPELINE_STATISTICS), 0);
+        if (hr == S_OK) {
+            m_cubesCountGPU = int(stats.IAPrimitives / 12);
+            m_lastCompletedFrame++;
+        }
+        else {
+            break;
+        }
+    }
+}
+
 void Scene::Render(ID3D11DeviceContext* context) {
     context->OMSetDepthStencilState(m_pDepthState, 0);
 
@@ -624,11 +771,27 @@ void Scene::Render(ID3D11DeviceContext* context) {
     context->VSSetShader(m_pVertexShader, nullptr, 0);
     context->VSSetConstantBuffers(0, 1, &m_pGeomBufferInst);
     context->VSSetConstantBuffers(1, 1, &m_pSceneConstantBuffer);
+    context->VSSetConstantBuffers(2, 1, &m_pGeomBufferInstVis);
     context->PSSetShader(m_pPixelShader, nullptr, 0);
     context->PSSetConstantBuffers(0, 1, &m_pGeomBufferInst);
     context->PSSetConstantBuffers(1, 1, &m_pSceneConstantBuffer);
     context->PSSetConstantBuffers(2, 1, &m_pLightConstantBuffer);
-    context->DrawIndexedInstanced(36, (UINT)m_cubeIndexies.size(), 0, 0, 0);
+
+    if (m_isCullingOn) {
+        if (m_computeCull) {
+            context->Begin(m_queries[m_curFrame % MAX_QUERY]);
+            context->DrawIndexedInstancedIndirect(m_pInderectArgs, 0);
+            context->End(m_queries[m_curFrame % MAX_QUERY]);
+            m_curFrame++;
+        }
+        else {
+            context->DrawIndexedInstanced(36, (UINT)m_cubeIndexies.size(), 0, 0, 0);
+        }
+    }
+    else {
+        context->DrawIndexedInstanced(36, MAX_CUBE, 0, 0, 0);
+    }
+    ReadQueries(context);
 
     // Render Spheres
     if (m_isSpheresOn) {

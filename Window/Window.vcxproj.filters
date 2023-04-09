@@ -179,5 +179,6 @@
     <FxCompile Include="TransPixelShader.hlsl" />
     <FxCompile Include="PostEffectVertexShader.hlsl" />
     <FxCompile Include="PostEffectPixelShader.hlsl" />
+    <FxCompile Include="FrustumCullingShader.hlsl" />
   </ItemGroup>
 </Project>
