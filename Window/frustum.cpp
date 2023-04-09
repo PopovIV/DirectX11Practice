@@ -104,47 +104,17 @@ void Frustum::ConstructFrustum(XMMATRIX viewMatrix, XMMATRIX projectionMatrix) {
 bool Frustum::CheckRectangle(XMFLOAT4 bbMin, XMFLOAT4 bbMax) {
     // Check if any of the 6 planes of the rectangle are inside the view frustum.
     for (int i = 0; i < 6; i++) {
-        float dotProduct = ((m_planes[i].x * bbMin.x) + (m_planes[i].y * bbMin.y) + (m_planes[i].z * bbMin.z) + (m_planes[i].w * 1.0f));
-        if (dotProduct >= 0.0f) {
-            continue;
+        XMFLOAT3 norm = XMFLOAT3(m_planes[i].x, m_planes[i].y, m_planes[i].z);
+        XMFLOAT4 p = XMFLOAT4(
+            norm.x < 0 ? bbMin.x : bbMax.x,
+            norm.y < 0 ? bbMin.y : bbMax.y,
+            norm.z < 0 ? bbMin.z : bbMax.z,
+            1.0f
+        );
+        float s = m_planes[i].x * p.x + m_planes[i].y * p.y + m_planes[i].z * p.z + m_planes[i].w * p.w;
+        if (s < 0.0f) {
+            return false;
         }
-
-        dotProduct = ((m_planes[i].x * bbMax.x) + (m_planes[i].y * bbMin.y) + (m_planes[i].z * bbMin.z) + (m_planes[i].w * 1.0f));
-        if (dotProduct >= 0.0f) {
-            continue;
-        }
-
-        dotProduct = ((m_planes[i].x * bbMin.x) + (m_planes[i].y * bbMin.y) + (m_planes[i].z * bbMin.z) + (m_planes[i].w * 1.0f));
-        if (dotProduct >= 0.0f) {
-            continue;
-        }
-
-        dotProduct = ((m_planes[i].x * bbMax.x) + (m_planes[i].y * bbMax.y) + (m_planes[i].z * bbMin.z) + (m_planes[i].w * 1.0f));
-        if (dotProduct >= 0.0f) {
-            continue;
-        }
-
-        dotProduct = ((m_planes[i].x * bbMin.x) + (m_planes[i].y * bbMin.y) + (m_planes[i].z * bbMax.z) + (m_planes[i].w * 1.0f));
-        if (dotProduct >= 0.0f) {
-            continue;
-        }
-
-        dotProduct = ((m_planes[i].x * bbMax.x) + (m_planes[i].y * bbMin.y) + (m_planes[i].z * bbMax.z) + (m_planes[i].w * 1.0f));
-        if (dotProduct >= 0.0f) {
-            continue;
-        }
-
-        dotProduct = ((m_planes[i].x * bbMin.x) + (m_planes[i].y * bbMax.y) + (m_planes[i].z * bbMax.z) + (m_planes[i].w * 1.0f));
-        if (dotProduct >= 0.0f) {
-            continue;
-        }
-
-        dotProduct = ((m_planes[i].x * bbMax.x) + (m_planes[i].y * bbMax.y) + (m_planes[i].z * bbMax.z) + (m_planes[i].w * 1.0f));
-        if (dotProduct >= 0.0f) {
-            continue;
-        }
-
-        return false;
     }
 
     return true;

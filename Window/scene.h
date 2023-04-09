@@ -6,6 +6,7 @@
 #include <d3d11.h>
 #include <directxmath.h>
 #include <string>
+#include <algorithm>
 #include <vector>
 #include "cubemap.h"
 #include "texture.h"
@@ -18,8 +19,14 @@
 using namespace DirectX;
 
 static const XMFLOAT4 AABB[] = {
-    {-0.5, -0.5, -0.5, 1.0},
-    {0.5,  0.5, 0.5, 1.0}
+     {-0.5f, -0.5f, -0.5f, 1.0f},
+     {0.5f, -0.5f, -0.5f, 1.0f},
+     {-0.5f, 0.5f, -0.5f, 1.0f},
+     {-0.5f, -0.5f, 0.5f, 1.0f},
+     {0.5f, 0.5f, -0.5f, 1.0f},
+     {0.5f, -0.5f, 0.5f, 1.0f},
+     {-0.5f, 0.5f, 0.5f, 1.0f},
+     {0.5f,  0.5f, 0.5f, 1.0f}
 };
 
 static const XMFLOAT4 Vertices[] = {

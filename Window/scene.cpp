@@ -266,7 +266,7 @@ HRESULT Scene::InitScene(ID3D11Device* device, ID3D11DeviceContext* context) {
 
             XMFLOAT4 min, max;
             XMStoreFloat4(&min, XMVector4Transform(XMLoadFloat4(&AABB[0]), geomBufferInst[i].mWorldMatrix));
-            XMStoreFloat4(&max, XMVector4Transform(XMLoadFloat4(&AABB[1]), geomBufferInst[i].mWorldMatrix));
+            XMStoreFloat4(&max, XMVector4Transform(XMLoadFloat4(&AABB[7]), geomBufferInst[i].mWorldMatrix));
             cullParams.bbMin[i] = min;
             cullParams.bbMax[i] = max;
         }
@@ -596,10 +596,20 @@ bool Scene::Frame(ID3D11DeviceContext* context, XMMATRIX worldMatrix, XMMATRIX v
     // Find cubes in frustum
     m_cubeIndexies.clear();
     for (int i = 0; i < m_cubesCount; i++) {
-        XMFLOAT4 min, max;
+        XMFLOAT4 min, max, tmp;
         XMStoreFloat4(&min, XMVector4Transform(XMLoadFloat4(&AABB[0]), geomBufferInst[i].mWorldMatrix));
-        XMStoreFloat4(&max, XMVector4Transform(XMLoadFloat4(&AABB[1]), geomBufferInst[i].mWorldMatrix));
-        if (!m_isCullingOn || m_pFrustum->CheckRectangle(min, max)) {
+        max = min;
+
+        for (int j = 1; j < 8; j++) {
+            XMStoreFloat4(&tmp, XMVector4Transform(XMLoadFloat4(&AABB[j]), geomBufferInst[i].mWorldMatrix));
+            max.x = (std::max)(max.x, tmp.x);
+            max.y = (std::max)(max.y, tmp.y);
+            max.z = (std::max)(max.z, tmp.z);
+            min.x = (std::min)(min.x, tmp.x);
+            min.y = (std::min)(min.y, tmp.y);
+            min.z = (std::min)(min.z, tmp.z);
+        }
+        if (!m_isCullingOn || m_computeCull || m_pFrustum->CheckRectangle(min, max)) {
             m_cubeIndexies.push_back(i);
         }
 

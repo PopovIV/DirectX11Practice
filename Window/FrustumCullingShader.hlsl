@@ -12,47 +12,17 @@ RWStructuredBuffer<uint4> objectsIds : register(u1);
 
 bool IsBoxInside(in float4 planes[6], in float3 bbMin, in float3 bbMax) {
     for (int i = 0; i < 6; i++) {
-        float dotProduct = ((planes[i].x * bbMin.x) + (planes[i].y * bbMin.y) + (planes[i].z * bbMin.z) + (planes[i].w * 1.0f));
-        if (dotProduct >= 0.0f) {
-            continue;
+        float3 norm = planes[i].xyz;
+        float4 p = float4(
+            norm.x < 0 ? bbMin.x : bbMax.x,
+            norm.y < 0 ? bbMin.y : bbMax.y,
+            norm.z < 0 ? bbMin.z : bbMax.z,
+            1.0f
+        );
+        float s = dot(p, planes[i]);
+        if (s < 0.0f) {
+            return false;
         }
-
-        dotProduct = ((planes[i].x * bbMax.x) + (planes[i].y * bbMin.y) + (planes[i].z * bbMin.z) + (planes[i].w * 1.0f));
-        if (dotProduct >= 0.0f) {
-            continue;
-        }
-
-        dotProduct = ((planes[i].x * bbMin.x) + (planes[i].y * bbMin.y) + (planes[i].z * bbMin.z) + (planes[i].w * 1.0f));
-        if (dotProduct >= 0.0f) {
-            continue;
-        }
-
-        dotProduct = ((planes[i].x * bbMax.x) + (planes[i].y * bbMax.y) + (planes[i].z * bbMin.z) + (planes[i].w * 1.0f));
-        if (dotProduct >= 0.0f) {
-            continue;
-        }
-
-        dotProduct = ((planes[i].x * bbMin.x) + (planes[i].y * bbMin.y) + (planes[i].z * bbMax.z) + (planes[i].w * 1.0f));
-        if (dotProduct >= 0.0f) {
-            continue;
-        }
-
-        dotProduct = ((planes[i].x * bbMax.x) + (planes[i].y * bbMin.y) + (planes[i].z * bbMax.z) + (planes[i].w * 1.0f));
-        if (dotProduct >= 0.0f) {
-            continue;
-        }
-
-        dotProduct = ((planes[i].x * bbMin.x) + (planes[i].y * bbMax.y) + (planes[i].z * bbMax.z) + (planes[i].w * 1.0f));
-        if (dotProduct >= 0.0f) {
-            continue;
-        }
-
-        dotProduct = ((planes[i].x * bbMax.x) + (planes[i].y * bbMax.y) + (planes[i].z * bbMax.z) + (planes[i].w * 1.0f));
-        if (dotProduct >= 0.0f) {
-            continue;
-        }
-
-        return false;
     }
 
     return true;
